@@ -1,0 +1,16 @@
+
+
+* opal kelly driver installation
+
+Linux and OS X don't need any additional USB drivers, although Linux needs a
+rules file.  There's also a "libokFrontPanel" shared library. That source
+appears to come from the API, but no instructions on how to compile (maybe in
+pdf?)
+
+* jack considerations
+
+the jack module will be pulling data off the opal kelly fifo.  to keep latency
+low this fifo should be kept as empty as possible. we can report latency to the
+jack system with jack_port_set_latency_range. latency estimates will also
+include any transmission delays, etc.  we may need to update from time to time
+based on the fill state of the fifo
