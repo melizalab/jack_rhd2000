@@ -1,9 +1,8 @@
 import os
-Import('env')
+Import('env drvname')
 
-libname = 'okFrontPanel'
 sources = ['okFrontPanelDLL.cpp']
 
-lib = env.SharedLibrary(libname, sources)
+lib = env.Library(drvname, sources)
 env.Alias('driver',lib)
-Return('lib')
+

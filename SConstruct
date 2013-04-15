@@ -6,6 +6,7 @@ else:
     system = 'Windows'
 
 env = Environment(ENV = os.environ,
+                  CPPPATH=['/opt/local/include'],
                   CCFLAGS=['-Wall', '-g2'],
                   tools=['default'])
 
@@ -14,4 +15,7 @@ if os.environ.has_key('CC'):
 if os.environ.has_key('CXX'):
     env.Replace(CXX=os.environ['CXX'])
 
-driver = SConscript('driver/SConscript', exports='env')
+drvname = 'okFrontPanel'
+
+SConscript('driver/SConscript', exports='env drvname')
+SConscript('test/SConscript', exports='env drvname')

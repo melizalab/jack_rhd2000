@@ -2,3 +2,4 @@
 *.dylib
 *.[oa]
 *.os
+/test/test_driver

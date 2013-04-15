@@ -1,11 +1,65 @@
 
 
-* opal kelly driver installation
+* install notes
 
 Linux and OS X don't need any additional USB drivers, although Linux needs a
-rules file.  There's also a "libokFrontPanel" shared library. That source
-appears to come from the API, but no instructions on how to compile (maybe in
-pdf?)
+rules file.
+
+to compile the interface program from Intan, first run qmake, then make.
+
+* rhythm api notes
+
+consists of several classes. we're stuck with c++, though most of the
+Intan-written classes are simple enough that the functionality could be lifted
+into a pure C interface.
+
+** okCFrontPanel
+
+opal kelly interface. This library comes from Opal Kelly. Used to upload the
+fpga bitfile. has some low-level memb functions for sending and receiving data.
+
+The version I compiled doesn't seem to work, so I'll need to use the precompiled
+versions shipped by Intan.
+
+The linking is windows style, which means we statically link to some functions
+in libokfrontpanel, but then call a method to load the dynamic library. This
+means the sofile has to be in a known location.
+
+** Rhd2000EvalBoard
+
+this is the main high-level interface. configures the device, retrieves data.
+owns the pointer to the okCFrontPanel object. essentially wraps common
+communication tasks with the OK.
+
+clarifications from the documentation follow:
+
+there are 8 MISO input streams from RHD2000 chips, two per SPI cable. There are
+8 available USB data streams.  Not all need to be enabled, which can reduce the
+size of the USB packets and thus the latency.
+
+there are 4 MOSI outputs to the RHD2000 chips. multiple chips can share the same
+SPI bus but will receive the same commands.  Every sampling period, the FPGA
+sends a series of commands through the MOSI bus.  The main command instructs the
+chips to return ADC results from the three channels, and there can be up to
+three additional commands.  Each auxiliary command produces an additional MISO
+result, which due to some pipeline delays are the first three results in the
+data frame.  The data streams are interleaved.
+
+Each data frame has three aux commands, but we can upload sequences of commands
+to be played in successive frames.  These sequences can repeat indefinitely in
+their entirety or in part (or not at all).
+
+Command sequences can be up to 1024 frames long, and there are RAM banks that
+can hold up to 16 command sequences.  Different command sequences can be
+assigned from these RAM banks to different ports.
+
+The data frames also contain results from the ADCs on the eval board (up to 8
+channels) and the TTL values.
+
+No obvious way to stream data to the DACs, though one can redirect a channel
+from an input data stream to the DAC for realtime monitoring. DAC values can be
+set manually but maximal output rate is ~1 kHz. This means stimulus presentation
+is going to require a sound card (or else some serious verilog reprogramming)
 
 * jack considerations
 
@@ -13,4 +67,73 @@ the jack module will be pulling data off the opal kelly fifo.  to keep latency
 low this fifo should be kept as empty as possible. we can report latency to the
 jack system with jack_port_set_latency_range. latency estimates will also
 include any transmission delays, etc.  we may need to update from time to time
-based on the fill state of the fifo
+based on the fill state of the fifo.
+
+one potential major problem is that the rhd200EvalBoard class allocates memory
+for incoming samples rather than putting them into a ringbuffer, so it's not
+usable for realtime acquisition. It looks like I could potentially preallocate
+the memory.
+
+question of whether to implement as a plugin or a backend driver. Advantage of a
+plugin is that it would work with both jack 1 and jack 2 without any
+translation.  The driver may have more privileges (like being able to set the
+sampling rate of the jack engine)
+
+The intan can't be used for stimulus presentation, so in acute experiments we'll
+also need a sound card. Jack2 appears to suport slaving multiple drivers, but
+there's little documentation on this.  I think the alsa_out plugin is the way to
+go.
+
+http://www.trac.jackaudio.org/wiki/A_guide_to_the_Jack1_source_code
+http://www.trac.jackaudio.org/wiki/A_guide_to_the_Jack2_source_code
+
+Another consideration is how to support interactions with the eval board in
+parallel to the jack acquisition. For example, setting amplifier bandwidths.
+Some operations, like impedance testing, probably need to be executed outside of
+JACK by separate programs. If multiple processes can communicate with the board,
+then I could probably upload new commands while jack is running. Otherwise the
+setup either needs to happen when starting the JACK driver, or beforehand.
+Should probably see how intan's software handles this use case. Could just swipe
+the impedance measurement and bandwidth code and implement as a separate
+program.
+
+Okay, looks like only one program can access the device at once.
+
+* DONE write test connection program (test_driver)
+
+connect to the opal kelly, upload the Rhythm bitfile, and flip some LEDs. I'm
+using only the opal kelly class for this, to get a sense of how complex it is to
+manipulate things directly
+
+* TODO write test data collection program (test_stream)
+
+This test program uses the Intan classes to connect to the device, scan for
+amplifiers, and collect a bit of data.
+
+The headstage-scanning code is fairly complex - it's lifted from mainwindow.cpp
+
+* TODO design interface
+
+The things we need to do with the eval board are:
+
+1. get number of connected headstages
+2. enable and disable spi ports
+3. set sample rate
+4. set headstage filtering parameters
+5. impedance testing
+6. stream data
+
+The interface for the jack driver should be relatively simple - specify how many
+ports to monitor and the sampling rate, at a minimum. Setting bandwidths could
+be done at startup. Z testing should probably have its own application.  Indeed,
+one could use the intan GUI to do this.
+
+Q: should I use the intan c++ interface or just lift the commands from the
+source? the interface is not very good, and doesn't actually provide much
+abstraction. But the real reason to reimplement is to replace the datablock
+class so we can stream the data more efficiently. The main culprits are
+inefficient casting (convert char * array into ints manually) and some extra
+copy operations.  Some copying is going to be necessary because of how the
+channels are interleaved.  Another consequence is that if the FPGA software
+changes, I'll have to update the implementation.  OTOH, if we want to hack that
+code we'll have to maintain our own impl.
