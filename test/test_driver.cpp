@@ -7,6 +7,8 @@ using namespace std;
 
 boost::shared_ptr<okCFrontPanel> dev;
 
+#define RHYTHM_BOARD_ID 500
+
 enum BoardDataSource {
         PortA1 = 0,
         PortA2 = 1,
@@ -81,6 +83,7 @@ main(int argc, char** argv)
         char dll_date[32], dll_time[32];
         string serialNumber = "";
         int i, nDevices;
+        int boardId = -1, boardVersion = -1;
 
         if (okFrontPanelDLL_LoadLib(NULL) == false) {
                 cerr << "FrontPanel DLL could not be loaded.  " <<
@@ -130,22 +133,24 @@ main(int argc, char** argv)
         cout << "Opal Kelly device serial number: " << dev->GetSerialNumber() << endl;
         cout << "Opal Kelly device ID string: " << dev->GetDeviceID() << endl << endl;
 
-        // load the bitfile
-        if (dev->ConfigureFPGA("fpga/main.bit") != okCFrontPanel::NoError) {
-                cout << "error loading bitfile" << endl;
-                return -1;
+        if (dev->IsFrontPanelEnabled()) {
+                dev->UpdateWireOuts();
+                boardId = dev->GetWireOutValue(WireOutBoardId);
+                boardVersion = dev->GetWireOutValue(WireOutBoardVersion);
         }
-
-        // Check for Opal Kelly FrontPanel support in the FPGA configuration.
-        if (dev->IsFrontPanelEnabled() == false) {
-                cerr << "Opal Kelly FrontPanel support is not enabled in this FPGA configuration." << endl;
-                return -1;
+        if (boardId != RHYTHM_BOARD_ID) {
+                // load the bitfile
+                if (dev->ConfigureFPGA("fpga/main.bit") != okCFrontPanel::NoError) {
+                        cout << "error loading bitfile" << endl;
+                        return -1;
+                }
+                else {
+                        cout << "loaded fpga firmware" << endl;
+                }
+                dev->UpdateWireOuts();
+                boardId = dev->GetWireOutValue(WireOutBoardId);
+                boardVersion = dev->GetWireOutValue(WireOutBoardVersion);
         }
-
-        int boardId, boardVersion;
-        dev->UpdateWireOuts();
-        boardId = dev->GetWireOutValue(WireOutBoardId);
-        boardVersion = dev->GetWireOutValue(WireOutBoardVersion);
         cout << "Board id: " << boardId << ", version: " << boardVersion << endl;
 
         // reset

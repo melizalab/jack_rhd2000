@@ -15,7 +15,7 @@ if os.environ.has_key('CC'):
 if os.environ.has_key('CXX'):
     env.Replace(CXX=os.environ['CXX'])
 
-drvname = 'okFrontPanel'
+drvname = 'rhd2000'
 
 SConscript('driver/SConscript', exports='env drvname')
 SConscript('test/SConscript', exports='env drvname')

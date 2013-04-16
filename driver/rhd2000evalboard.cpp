@@ -196,7 +196,7 @@ void Rhd2000EvalBoard::initialize()
     selectAuxCommandLength(AuxCmd2, 0, 0);
     selectAuxCommandLength(AuxCmd3, 0, 0);
     setContinuousRunMode(true);
-    setMaxTimeStep(4294967295);  // 4294967295 == (2^32 - 1)
+    setMaxTimeStep(4294967295U);  // 4294967295 == (2^32 - 1)
 
     setCableLengthFeet(PortA, 3.0);  // assume 3 ft cables
     setCableLengthFeet(PortB, 3.0);

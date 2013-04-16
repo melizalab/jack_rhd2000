@@ -110,7 +110,12 @@ manipulate things directly
 This test program uses the Intan classes to connect to the device, scan for
 amplifiers, and collect a bit of data.
 
-The headstage-scanning code is fairly complex - it's lifted from mainwindow.cpp
+The headstage-scanning code is fairly complex - it's lifted from mainwindow.cpp.
+I'm leaving out the delay inference for now.
+
+reading data a block at a time is way too slow.  probably need to pull more data
+off the usb bus at a time to be efficient. Blocks are 60 frames.  Probably some
+of this inefficiency is due to how data blocks are filled from the usb buffer.
 
 * TODO design interface
 

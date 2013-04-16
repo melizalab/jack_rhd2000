@@ -3,3 +3,4 @@
 *.[oa]
 *.os
 /test/test_driver
+/test/test_stream
