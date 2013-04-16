@@ -15,7 +15,7 @@ if os.environ.has_key('CC'):
 if os.environ.has_key('CXX'):
     env.Replace(CXX=os.environ['CXX'])
 
-drvname = 'rhd2000'
+libname = 'rhd2000'
 
-SConscript('driver/SConscript', exports='env drvname')
-SConscript('test/SConscript', exports='env drvname')
+SConscript('lib/SConscript', exports='env libname')
+SConscript('test/SConscript', exports='env libname')

@@ -1,0 +1,6 @@
+import os
+Import('env libname')
+
+lib = env.Library(libname, env.Glob("*.cpp"))
+env.Alias('lib',lib)
+

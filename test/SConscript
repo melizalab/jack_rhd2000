@@ -1,10 +1,10 @@
 import os
-Import('env drvname')
+Import('env libname')
 
 menv = env.Clone()
-menv.Append(CPPPATH=['#driver'],
-            LIBPATH=['#driver'],
-            LIBS=[drvname])
+menv.Append(CPPPATH=['#lib'],
+            LIBPATH=['#lib'],
+            LIBS=[libname])
 
 src = env.Glob("test*.c") + env.Glob("test*.cpp")
 prg = [menv.Program(os.path.splitext(str(f))[0], f) for f in src]

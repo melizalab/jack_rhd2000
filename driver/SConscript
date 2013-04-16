@@ -1,8 +1,0 @@
-import os
-Import('env drvname')
-
-sources = ['okFrontPanelDLL.cpp','rhd2000evalboard.cpp','rhd2000registers.cpp','rhd2000datablock.cpp']
-
-lib = env.Library(drvname, sources)
-env.Alias('driver',lib)
-

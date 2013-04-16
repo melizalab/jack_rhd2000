@@ -105,7 +105,7 @@ connect to the opal kelly, upload the Rhythm bitfile, and flip some LEDs. I'm
 using only the opal kelly class for this, to get a sense of how complex it is to
 manipulate things directly
 
-* TODO write test data collection program (test_stream)
+* DONE write test data collection program (test_stream)
 
 This test program uses the Intan classes to connect to the device, scan for
 amplifiers, and collect a bit of data.
@@ -142,3 +142,37 @@ copy operations.  Some copying is going to be necessary because of how the
 channels are interleaved.  Another consequence is that if the FPGA software
 changes, I'll have to update the implementation.  OTOH, if we want to hack that
 code we'll have to maintain our own impl.
+
+Some further testing reveals that pulling data off the usb bus one 60-frame
+block at a time is much too slow.  This is a latency of 2 ms at 30 kHz.  The intan gui
+is able to keep the fifo empty most of the time at 20 kHz, reading 12 blocks at
+a time, so that means the latency is ~36 ms (or 720 frames).
+
+I think I'm going to have to reimplement. Q: write a separate, testable
+interface to the eval board, or just write a jack driver?  If a jack driver,
+jack1 or jack2?
+
+
+
+** base interface
+
+base interfaces should encapsulate a lot, in my opinion, so they can be general.
+a general daq interface should support starting and stopping, methods to query
+the availability of data, and methods to query the capabilities of the device.
+I'm not sure about whether a read() fxn is useful, because the format of the
+data in memory will depend so much on the implementation.  read() could return a
+void *, of course, though that's almost like not specifying an interface.
+
+support changes to sampling rate? in principle this is okay, though it requires
+colleciton to be stopped and the fifo to be flushed.  in practice there are some
+complication related to regeneration of command sequences (see below)
+
+a more general question is whether we should support dynamic reconfiguration of
+the object.  If the interface is intended only for JACK drivers, the
+configuration will always only happen once.
+
+** rhd2000 eval implementation
+
+a few tricky bits related to the aux command sequences.  setting the sampling
+rate requires regeneration of the command sequences, both for the impedance
+checking DAC and some registers on the amplifier.

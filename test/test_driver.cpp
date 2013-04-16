@@ -140,7 +140,7 @@ main(int argc, char** argv)
         }
         if (boardId != RHYTHM_BOARD_ID) {
                 // load the bitfile
-                if (dev->ConfigureFPGA("fpga/main.bit") != okCFrontPanel::NoError) {
+                if (dev->ConfigureFPGA("rhythm_130302.bit") != okCFrontPanel::NoError) {
                         cout << "error loading bitfile" << endl;
                         return -1;
                 }
