@@ -73,7 +73,6 @@ protected:
         bool dcm_done() const;
         bool clock_locked() const;
 
-
 private:
         void reset_board();
         void set_sampling_rate();

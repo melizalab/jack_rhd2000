@@ -153,11 +153,11 @@ rhd2keval::reset_board()
         okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0x0000, 0xffff);
         // SPI run continuous [bit 1]
         okFrontPanel_SetWireInValue(_dev, WireInResetRun, 1 << 1, 1 << 1);
-        // DSP settle [bit 2]
+        // DSP settle [bit 2] = 1
         okFrontPanel_SetWireInValue(_dev, WireInResetRun, 1 << 2, 1 << 2);
-        // dac noise slice [12:6]
+        // dac noise slice [12:6] = 0
         okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0 << 6, 0x1fc0);
-        // dac gain [15:13]
+        // dac gain [15:13] = 2^0
         okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0 << 13, 0xe000);
         okFrontPanel_UpdateWireIns(_dev);
 
@@ -170,6 +170,7 @@ rhd2keval::reset_board()
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel5678, PortC2 << 4, 0x0f << 4);
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel5678, PortD1 << 8, 0x0f << 8);
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel5678, PortD2 << 12, 0x0f << 12);
+        // enable all data streams
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamEn, 0x000f , 0x000f);
         okFrontPanel_UpdateWireIns(_dev);
 
@@ -192,148 +193,143 @@ rhd2keval::reset_board()
 void
 rhd2keval::set_sampling_rate()
 {
-    // Assuming a 100 MHz reference clock is provided to the FPGA, the programmable FPGA clock frequency
-    // is given by:
-    //
-    //       FPGA internal clock frequency = 100 MHz * (M/D) / 2
-    //
-    // M and D are "multiply" and "divide" integers used in the FPGA's digital clock manager (DCM) phase-
-    // locked loop (PLL) frequency synthesizer, and are subject to the following restrictions:
-    //
-    //                M must have a value in the range of 2 - 256
-    //                D must have a value in the range of 1 - 256
-    //                M/D must fall in the range of 0.05 - 3.33
-    //
-    // (See pages 85-86 of Xilinx document UG382 "Spartan-6 FPGA Clocking Resources" for more details.)
-    //
-    // This variable-frequency clock drives the state machine that controls all SPI communication
-    // with the RHD2000 chips.  A complete SPI cycle (consisting of one CS pulse and 16 SCLK pulses)
-    // takes 80 clock cycles.  The SCLK period is 4 clock cycles; the CS pulse is high for 14 clock
-    // cycles between commands.
-    //
-    // Rhythm samples all 32 channels and then executes 3 "auxiliary" commands that can be used to read
-    // and write from other registers on the chip, or to sample from the temperature sensor or auxiliary ADC
-    // inputs, for example.  Therefore, a complete cycle that samples from each amplifier channel takes
-    // 80 * (32 + 3) = 80 * 35 = 2800 clock cycles.
-    //
-    // So the per-channel sampling rate of each amplifier is 2800 times slower than the clock frequency.
-    //
-    // Based on these design choices, we can use the following values of M and D to generate the following
-    // useful amplifier sampling rates for electrophsyiological applications:
-    //
-    //   M    D     clkout frequency    per-channel sample rate     per-channel sample period
-    //  ---  ---    ----------------    -----------------------     -------------------------
-    //    7  125          2.80 MHz               1.00 kS/s                 1000.0 usec = 1.0 msec
-    //    7  100          3.50 MHz               1.25 kS/s                  800.0 usec
-    //   21  250          4.20 MHz               1.50 kS/s                  666.7 usec
-    //   14  125          5.60 MHz               2.00 kS/s                  500.0 usec
-    //   35  250          7.00 MHz               2.50 kS/s                  400.0 usec
-    //   21  125          8.40 MHz               3.00 kS/s                  333.3 usec
-    //   14   75          9.33 MHz               3.33 kS/s                  300.0 usec
-    //   28  125         11.20 MHz               4.00 kS/s                  250.0 usec
-    //    7   25         14.00 MHz               5.00 kS/s                  200.0 usec
-    //    7   20         17.50 MHz               6.25 kS/s                  160.0 usec
-    //  112  250         22.40 MHz               8.00 kS/s                  125.0 usec
-    //   14   25         28.00 MHz              10.00 kS/s                  100.0 usec
-    //    7   10         35.00 MHz              12.50 kS/s                   80.0 usec
-    //   21   25         42.00 MHz              15.00 kS/s                   66.7 usec
-    //   28   25         56.00 MHz              20.00 kS/s                   50.0 usec
-    //   35   25         70.00 MHz              25.00 kS/s                   40.0 usec
-    //   42   25         84.00 MHz              30.00 kS/s                   33.3 usec
-    //
-    // To set a new clock frequency, assert new values for M and D (e.g., using okWireIn modules) and
-    // pulse DCM_prog_trigger high (e.g., using an okTriggerIn module).  If this module is reset, it
-    // reverts to a per-channel sampling rate of 30.0 kS/s.
-    ulong M, D;
-    if (_sampling_rate < 1125) { // 1000 Hz
-            M = 7;
-            D = 125;
-    }
-    else if (_sampling_rate < 1375) { // 1250 Hz
-            M = 7;
-            D = 100;
-    }
-    else if (_sampling_rate < 1750) { // 1500 Hz
-            M = 21;
-            D = 250;
-    }
-    else if (_sampling_rate < 2250) { // 2000 Hz
-            M = 14;
-            D = 125;
-    }
-    else if (_sampling_rate < 2750) { // 2500
-            M = 35;
-            D = 250;
-    }
-    // else if (_sampling_rate < 3167) { // 3000
-    else if (_sampling_rate < 3500) { // 3000
-            M = 21;
-            D = 125;
-    // I've disabled 3333 Hz because it's not integral
-    // } else if (_sampling_rate < 3667) { // 3333
-    //         M = 14;
-    //         D = 75;
-    } else if (_sampling_rate < 4500) { // 4000
-            M = 28;
-            D = 125;
-    } else if (_sampling_rate < 5265) { // 5000
-            M = 7;
-            D = 25;
-    } else if (_sampling_rate < 7125) { // 6250
-            M = 7;
-            D = 20;
-    } else if (_sampling_rate < 9000) { // 8000
-            M = 112;
-            D = 250;
-    } else if (_sampling_rate < 11250) { // 10k
-            M = 14;
-            D = 25;
-    } else if (_sampling_rate < 13750) { // 12.5k
-            M = 7;
-            D = 10;
-    } else if (_sampling_rate < 11250) { // 15k
-            M = 21;
-            D = 25;
-    } else if (_sampling_rate < 22500) { // 20k
-            M = 28;
-            D = 25;
-    } else if (_sampling_rate < 27500) { // 25k
-            M = 35;
-            D = 25;
-    } else { // 30k
-            M = 42;
-            D = 25;
-    }
-    _sampling_rate = 1e5 * M / D / 2 / 2.8;
+        /* from the intan docs
+         * Assuming a 100 MHz reference clock is provided to the FPGA, the programmable FPGA clock frequency
+         * is given by:
+         *
+         *       FPGA internal clock frequency = 100 MHz * (M/D) / 2
+         *
+         * M and D are "multiply" and "divide" integers used in the FPGA's digital clock manager (DCM) phase-
+         * locked loop (PLL) frequency synthesizer, and are subject to the following restrictions:
+         *
+         *                M must have a value in the range of 2 - 256
+         *                D must have a value in the range of 1 - 256
+         *                M/D must fall in the range of 0.05 - 3.33
+         *
+         * (See pages 85-86 of Xilinx document UG382 "Spartan-6 FPGA Clocking Resources" for more details.)
+         *
+         * This variable-frequency clock drives the state machine that controls all SPI communication
+         * with the RHD2000 chips.  A complete SPI cycle (consisting of one CS pulse and 16 SCLK pulses)
+         * takes 80 clock cycles.  The SCLK period is 4 clock cycles; the CS pulse is high for 14 clock
+         * cycles between commands.
+         *
+         * Rhythm samples all 32 channels and then executes 3 "auxiliary" commands that can be used to read
+         * and write from other registers on the chip, or to sample from the temperature sensor or auxiliary ADC
+         * inputs, for example.  Therefore, a complete cycle that samples from each amplifier channel takes
+         * 80 * (32 + 3) = 80 * 35 = 2800 clock cycles.
+         *
+         * So the per-channel sampling rate of each amplifier is 2800 times slower than the clock frequency.
+         *
+         * Based on these design choices, we can use the following values of M and D to generate the following
+         * useful amplifier sampling rates for electrophsyiological applications:
+         *
+         *   M    D     clkout frequency    per-channel sample rate     per-channel sample period
+         *  ---  ---    ----------------    -----------------------     -------------------------
+         *    7  125          2.80 MHz               1.00 kS/s                 1000.0 usec = 1.0 msec
+         *    7  100          3.50 MHz               1.25 kS/s                  800.0 usec
+         *   21  250          4.20 MHz               1.50 kS/s                  666.7 usec
+         *   14  125          5.60 MHz               2.00 kS/s                  500.0 usec
+         *   35  250          7.00 MHz               2.50 kS/s                  400.0 usec
+         *   21  125          8.40 MHz               3.00 kS/s                  333.3 usec
+         *   14   75          9.33 MHz               3.33 kS/s                  300.0 usec
+         *   28  125         11.20 MHz               4.00 kS/s                  250.0 usec
+         *    7   25         14.00 MHz               5.00 kS/s                  200.0 usec
+         *    7   20         17.50 MHz               6.25 kS/s                  160.0 usec
+         *  112  250         22.40 MHz               8.00 kS/s                  125.0 usec
+         *   14   25         28.00 MHz              10.00 kS/s                  100.0 usec
+         *    7   10         35.00 MHz              12.50 kS/s                   80.0 usec
+         *   21   25         42.00 MHz              15.00 kS/s                   66.7 usec
+         *   28   25         56.00 MHz              20.00 kS/s                   50.0 usec
+         *   35   25         70.00 MHz              25.00 kS/s                   40.0 usec
+         *   42   25         84.00 MHz              30.00 kS/s                   33.3 usec
+         *
+         * To set a new clock frequency, assert new values for M and D (e.g., using okWireIn modules) and
+         * pulse DCM_prog_trigger high (e.g., using an okTriggerIn module).  If this module is reset, it
+         * reverts to a per-channel sampling rate of 30.0 kS/s.
+         */
 
-    // Wait for DcmProgDone = 1 before reprogramming clock synthesizer
-    while (!dcm_done()) {}
+        ulong M, D;
+        if (_sampling_rate < 1125) { // 1000 Hz
+                M = 7;
+                D = 125;
+        } else if (_sampling_rate < 1375) { // 1250 Hz
+                M = 7;
+                D = 100;
+        } else if (_sampling_rate < 1750) { // 1500 Hz
+                M = 21;
+                D = 250;
+        } else if (_sampling_rate < 2250) { // 2000 Hz
+                M = 14;
+                D = 125;
+        } else if (_sampling_rate < 2750) { // 2500
+                M = 35;
+                D = 250;
+        }
+        // I've disabled 3333 Hz because it's not an integral # of samples / sec
+        else if (_sampling_rate < 3500) { // 3000
+                M = 21;
+                D = 125;
+        } else if (_sampling_rate < 4500) { // 4000
+                M = 28;
+                D = 125;
+        } else if (_sampling_rate < 5265) { // 5000
+                M = 7;
+                D = 25;
+        } else if (_sampling_rate < 7125) { // 6250
+                M = 7;
+                D = 20;
+        } else if (_sampling_rate < 9000) { // 8000
+                M = 112;
+                D = 250;
+        } else if (_sampling_rate < 11250) { // 10k
+                M = 14;
+                D = 25;
+        } else if (_sampling_rate < 13750) { // 12.5k
+                M = 7;
+                D = 10;
+        } else if (_sampling_rate < 11250) { // 15k
+                M = 21;
+                D = 25;
+        } else if (_sampling_rate < 22500) { // 20k
+                M = 28;
+                D = 25;
+        } else if (_sampling_rate < 27500) { // 25k
+                M = 35;
+                D = 25;
+        } else { // 30k
+                M = 42;
+                D = 25;
+        }
+        _sampling_rate = 1e5 * M / D / 2 / 2.8;
 
-    // Reprogram clock synthesizer
-    okFrontPanel_SetWireInValue(_dev, WireInDataFreqPll, (256 * M + D), 0xffff);
-    okFrontPanel_UpdateWireIns(_dev);
-    okFrontPanel_ActivateTriggerIn(_dev, TrigInDcmProg, 0);
+        // Wait for DcmProgDone = 1 before reprogramming clock synthesizer
+        while (!dcm_done()) {}
 
-    // Wait for DataClkLocked = 1 before allowing data acquisition to continue
-    while (!clock_locked()) {}
+        // Reprogram clock synthesizer
+        okFrontPanel_SetWireInValue(_dev, WireInDataFreqPll, (256 * M + D), 0xffff);
+        okFrontPanel_UpdateWireIns(_dev);
+        okFrontPanel_ActivateTriggerIn(_dev, TrigInDcmProg, 0);
+
+        // Wait for DataClkLocked = 1 before allowing data acquisition to continue
+        while (!clock_locked()) {}
 }
 
 bool
 rhd2keval::dcm_done() const
 {
-    ulong value;
-    okFrontPanel_UpdateWireOuts(_dev);
-    value = okFrontPanel_GetWireOutValue(_dev, WireOutDataClkLocked);
-    return ((value & 0x0002) > 1);
+        ulong value;
+        okFrontPanel_UpdateWireOuts(_dev);
+        value = okFrontPanel_GetWireOutValue(_dev, WireOutDataClkLocked);
+        return ((value & 0x0002) > 1);
 }
 
 bool
 rhd2keval::clock_locked() const
 {
-    ulong value;
-    okFrontPanel_UpdateWireOuts(_dev);
-    value = okFrontPanel_GetWireOutValue(_dev, WireOutDataClkLocked);
-    return ((value & 0x0001) > 0);
+        ulong value;
+        okFrontPanel_UpdateWireOuts(_dev);
+        value = okFrontPanel_GetWireOutValue(_dev, WireOutDataClkLocked);
+        return ((value & 0x0001) > 0);
 }
 
 std::ostream &
