@@ -38,11 +38,22 @@ test_lowerbandwidth()
         }
 }
 
-
+void
+test_upperbandwidth()
+{
+        const double targets[] = {100, 150, 200, 250, 300, 500, 750, 1000,
+                                  2000, 2500, 3000, 5000, 7500, 10000, 15000, 20000};
+        for (size_t i = 0; i < sizeof(targets) / sizeof(double); ++i) {
+                amp->set_upper_bandwidth(targets[i]);
+                cout << "upper bandwidth: requested=" << targets[i] << " Hz"
+                     << ", got=" << amp->upper_bandwidth() << endl;
+        }
+}
 int
 main(int, char**)
 {
         amp.reset(new rhd2k::rhd2000(sampling_rate));
         test_dspcutoff();
         test_lowerbandwidth();
+        test_upperbandwidth();
 }

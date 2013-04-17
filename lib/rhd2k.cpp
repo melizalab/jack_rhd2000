@@ -3,9 +3,13 @@
 #include "rhd2k.hpp"
 
 #define RH1_DAC1R 8
+#define RH1_DAC1M 0x3f
 #define RH1_DAC2R 9
+#define RH1_DAC2M 0x1f
 #define RH2_DAC1R 10
+#define RH2_DAC1M 0x3f
 #define RH2_DAC2R 11
+#define RH2_DAC2M 0x1f
 #define RL_DAC1R 12
 #define RL_DAC1M 0x7f
 #define RL_DAC2R 13
@@ -159,10 +163,10 @@ rhd2000::rhd2000(unsigned int sampling_rate)
 
 double
 rhd2000::upper_bandwidth() const {
-        int rh1dac1 = _registers[RH1_DAC1R] & 0x1f;
-        int rh1dac2 = _registers[RH1_DAC2R] & 0x0f;
-        int rh2dac1 = _registers[RH2_DAC1R] & 0x1f;
-        int rh2dac2 = _registers[RH2_DAC2R] & 0x0f;
+        int rh1dac1 = _registers[RH1_DAC1R] & RH1_DAC1M;
+        int rh1dac2 = _registers[RH1_DAC2R] & RH1_DAC2M;
+        int rh2dac1 = _registers[RH2_DAC1R] & RH2_DAC1M;
+        int rh2dac2 = _registers[RH2_DAC2R] & RH2_DAC2M;
 
         double rh1 = RH1Base + RH1Dac1Unit * rh1dac1 + RH1Dac2Unit * rh1dac2;
         double rh2 = RH2Base + RH2Dac1Unit * rh2dac1 + RH2Dac2Unit * rh2dac2;
@@ -170,8 +174,37 @@ rhd2000::upper_bandwidth() const {
 }
 
 void
-rhd2000::set_upper_bandwidth(double)
-{}
+rhd2000::set_upper_bandwidth(double hz)
+{
+        int rh1dac1, rh1dac2, rh2dac1, rh2dac2;
+        double rh1target, rh2target;
+        // Upper bandwidths higher than 30 kHz don't work well with the RHD2000 amplifiers
+        if (hz > 30000.0) hz = 30000.0;
+
+
+        rh1target = rH1FromUpperBandwidth(hz);
+        rh1dac2 = floor((rh1target - RH1Base) / RH1Dac2Unit);
+        rh1dac1 = round((rh1target - RH1Base - rh1dac2 * RH1Dac2Unit) / RH1Dac1Unit);
+        assert(rh1dac1 >= 0 && rh1dac2 >= 0 && rh1dac1 <= RH1_DAC1M && rh1dac2 <= RH1_DAC2M);
+
+        rh2target = rH2FromUpperBandwidth(hz);
+        rh2dac2 = floor((rh2target - RH2Base) / RH2Dac2Unit);
+        rh2dac1 = round((rh2target - RH2Base - rh2dac2 * RH2Dac2Unit) / RH2Dac1Unit);
+        assert(rh2dac1 >= 0 && rh2dac2 >= 0 && rh2dac1 <= RH2_DAC1M && rh2dac2 <= RH2_DAC2M);
+
+        _registers[RH1_DAC1R] = (_registers[RH1_DAC1R] & ~RH1_DAC1M) | (rh1dac1 & RH1_DAC1M);
+        _registers[RH1_DAC2R] = (_registers[RH1_DAC2R] & ~RH1_DAC2M) | (rh1dac2 & RH1_DAC2M);
+        _registers[RH2_DAC1R] = (_registers[RH2_DAC1R] & ~RH2_DAC1M) | (rh2dac1 & RH2_DAC1M);
+        _registers[RH2_DAC2R] = (_registers[RH2_DAC2R] & ~RH2_DAC2M) | (rh2dac2 & RH2_DAC2M);
+
+#ifndef NDEBUG
+        // test bit math
+        double expect1 = upperBandwidthFromRH1(RH1Base + RH1Dac1Unit * rh1dac1 + RH1Dac2Unit * rh1dac2);
+        double expect2 = upperBandwidthFromRH2(RH2Base + RH2Dac1Unit * rh2dac1 + RH2Dac2Unit * rh2dac2);
+        assert(upper_bandwidth() == sqrt(expect1 * expect2));
+#endif
+
+}
 
 double
 rhd2000::lower_bandwidth() const
@@ -195,15 +228,15 @@ rhd2000::set_lower_bandwidth(double hz)
         target = rLFromLowerBandwidth(hz);
         dac3 = (hz < 0.15);
         dac2 = floor((target - RLBase - dac3 * RLDac3Unit) / RLDac2Unit);
-        dac1 = floor((target - RLBase - dac3 * RLDac3Unit - dac2 * RLDac2Unit) / RLDac1Unit);
-
+        dac1 = round((target - RLBase - dac3 * RLDac3Unit - dac2 * RLDac2Unit) / RLDac1Unit);
+        assert(dac1 >= 0 && dac2 >= 0 && dac1 <= RL_DAC1M && dac2 <= RL_DAC2M);
 
         _registers[RL_DAC1R] = (_registers[RL_DAC1R] & 0x80) | (dac1 & RL_DAC1M);
         _registers[RL_DAC2R] = (_registers[RL_DAC2R] & 0x80) | (dac2 & RL_DAC2M);
         _registers[RL_DAC3R] = (_registers[RL_DAC2R] & ~RL_DAC3M) | (dac3 << 6);
 
-        // test bit math
 #ifndef NDEBUG
+        // test bit math
         double expected = lowerBandwidthFromRL(RLBase + RLDac1Unit * dac1 + RLDac2Unit * dac2 + RLDac3Unit * dac3);
         assert(lower_bandwidth() == expected);
 #endif
