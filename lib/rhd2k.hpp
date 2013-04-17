@@ -1,10 +1,11 @@
 #ifndef _RHD2K_H
 #define _RHD2K_H
 
+#include <cassert>
 #include <vector>
 #include <boost/noncopyable.hpp>
 
-namespace rhd2000 {
+namespace rhd2k {
 
 inline short calibrate() { return 0x5500; } // 0101010100000000
 inline short cal_clear() { return 0x6a00; } // 0110101000000000
@@ -47,10 +48,10 @@ public:
         void set_dsp_cutoff(double);
 
         void set_amp_power(unsigned short channel, bool powered);
-        // std::vector<int> amp_power() const;
+        unsigned long amp_power() const;
 
         /** Update internal state with results from regset command. */
-        void update(char const * data);
+        void update(unsigned char const * data);
 
         /** True if an amplifier is connected to this port */
         bool connected() const;
