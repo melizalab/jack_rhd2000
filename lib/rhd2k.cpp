@@ -1,5 +1,7 @@
-#include <boost/utility/binary.hpp>
+#include <stdint.h>
 #include <cmath>
+#include <ostream>
+#include <boost/utility/binary.hpp>
 #include "rhd2k.hpp"
 
 #define RH1_DAC1R 8
@@ -18,7 +20,9 @@
 #define RL_DAC3M 0x40
 #define AMP_REGISTER 14
 
-static unsigned char default_registers[] =
+using namespace rhd2k;
+
+static rhd2000::data_type ram_register_defaults[] =
 { BOOST_BINARY(11011110),      // 0: mostly fixed values; fast settle [5] off
   BOOST_BINARY(01000000),      // 1: set ADC buffer bias [5:0] based on sample rate
   BOOST_BINARY(00000000),      // 2: set mux bias [5:0] based on sample rate
@@ -38,25 +42,20 @@ static unsigned char default_registers[] =
   BOOST_BINARY(11111111),      // 16: amps 16-23 enabled
   BOOST_BINARY(11111111)       // 17: amps 23-31 enabled
 };
+static const std::size_t ram_register_count = sizeof(ram_register_defaults);
 
 static const double RH1Base = 2200.0;
 static const double RH1Dac1Unit = 600.0;
 static const double RH1Dac2Unit = 29400.0;
-static const int RH1Dac1Steps = 63;
-static const int RH1Dac2Steps = 31;
 
 static const double RH2Base = 8700.0;
 static const double RH2Dac1Unit = 763.0;
 static const double RH2Dac2Unit = 38400.0;
-static const int RH2Dac1Steps = 63;
-static const int RH2Dac2Steps = 31;
 
 static const double RLBase = 3500.0;
 static const double RLDac1Unit = 175.0;
 static const double RLDac2Unit = 12700.0;
 static const double RLDac3Unit = 3000000.0;
-static const int RLDac1Steps = 127;
-static const int RLDac2Steps = 63;
 static const double Pi = 2*acos(0.0);
 
 
@@ -149,13 +148,12 @@ lowerBandwidthFromRL(double rL)
 }
 
 
-using namespace rhd2k;
-
-rhd2000::rhd2000(unsigned int sampling_rate)
+rhd2000::rhd2000(std::size_t sampling_rate)
         : _sampling_rate(sampling_rate)
 {
-        memcpy(_registers, default_registers, sizeof(default_registers));
-        memset(_registers + sizeof(default_registers), 0, regset_command_length - sizeof(default_registers));
+        memset(_registers, 0, register_count * sizeof(data_type));
+        memcpy(_registers, ram_register_defaults, ram_register_count * sizeof(data_type));
+        set_sampling_rate_registers();
         set_dsp_cutoff(1.0);
         set_upper_bandwidth(10000);
         set_lower_bandwidth(1.0);
@@ -269,25 +267,32 @@ rhd2000::set_dsp_cutoff(double hz)
                 double q = exp(2 * Pi * hz / _sampling_rate);
                 double n = round(log2(q / (q - 1)));
                 if (n < 1) n = 1;
-                _registers[4] = (_registers[4] & 0xe0) | 0x10 | ((unsigned char)n & 0x0f);
+                _registers[4] = (_registers[4] & 0xe0) | 0x10 | ((data_type)n & 0x0f);
         }
 
 }
 
 void
-rhd2000::set_amp_power(unsigned short channel, bool powered)
+rhd2000::set_amp_power(std::size_t channel, bool powered)
 {
-        assert(channel <= 32);
+        assert(channel <= max_amps);
         std::size_t reg = (channel / 8) + AMP_REGISTER;
-        unsigned char mask = 1 << (channel % 8);
+        data_type mask = 1 << (channel % 8);
         if (powered) _registers[reg] |= mask;
         else _registers[reg] &= ~mask;
 }
 
-unsigned long
+std::bitset<rhd2000::max_amps>
 rhd2000::amp_power() const
 {
-        return *reinterpret_cast<unsigned long const *>(_registers+AMP_REGISTER);
+        // TODO: read more than 32 bits if number of amps increases
+        return std::bitset<max_amps>(*reinterpret_cast<uint32_t const *>(_registers+AMP_REGISTER));
+}
+
+std::size_t
+rhd2000::namps_powered() const
+{
+        return amp_power().count();
 }
 
 void
@@ -322,14 +327,151 @@ rhd2000::chip_id() const
 }
 
 void
-rhd2000::command_regset(std::vector<short> &out, bool calibrate)
-{}
+rhd2000::set_sampling_rate_registers()
+{
+        int muxBias, adcBufferBias;
+
+        if (_sampling_rate < 3334) {
+                muxBias = 40;
+                adcBufferBias = 32;
+        } else if (_sampling_rate < 4001) {
+                muxBias = 40;
+                adcBufferBias = 16;
+        } else if (_sampling_rate < 5001) {
+                muxBias = 40;
+                adcBufferBias = 8;
+        } else if (_sampling_rate < 6251) {
+                muxBias = 32;
+                adcBufferBias = 8;
+        } else if (_sampling_rate < 8001) {
+                muxBias = 26;
+                adcBufferBias = 8;
+        } else if (_sampling_rate < 10001) {
+                muxBias = 18;
+                adcBufferBias = 4;
+        } else if (_sampling_rate < 12501) {
+                muxBias = 16;
+                adcBufferBias = 3;
+        } else if (_sampling_rate < 15001) {
+                muxBias = 7;
+                adcBufferBias = 3;
+        } else {
+                muxBias = 4;
+                adcBufferBias = 2;
+        }
+
+        _registers[1] = (adcBufferBias & 0x3f) | (_registers[1] & 0xe0);
+        _registers[2] = muxBias;
+}
+
+void
+rhd2000::command_regset(std::vector<short> &out, bool do_calibrate)
+{
+        std::size_t reg;
+        std::size_t c = 0;
+        out.resize(register_sequence_length);
+
+        // Start with a few dummy commands in case chip is still powering up
+        out[c++] = reg_read(63);
+        out[c++] = reg_read(63);
+
+        // program RAM registers
+        for (reg = 0; reg < ram_register_count; ++reg) {
+                // skip register 3 and register 6 - set in a different command
+                if (reg == 3 || reg == 6) continue;
+                out[c++] = reg_write(reg, _registers[reg]);
+        }
+
+        // read back RAM registers
+        for (reg = 0; reg < ram_register_count; ++reg) {
+                out[c++] = reg_read(reg);
+        }
+
+        // read intan name
+        for (reg = 40; reg < 45; ++reg) {
+                out[c++] = reg_read(reg);
+        }
+
+        // read chip name
+        for (reg = 48; reg < 56; ++reg) {
+                out[c++] = reg_read(reg);
+        }
+
+        // read other rom registers
+        for (reg = 59; reg < 64; ++reg) {
+                out[c++] = reg_read(reg);
+        }
+
+        if (do_calibrate)
+                out[c++] = calibrate();
+
+        // fill out command list with dummies
+        while (c < register_sequence_length) {
+                out[c++] = reg_read(63);
+        }
+
+}
 
 void
 rhd2000::command_auxsample(std::vector<short> &out)
-{}
+{
+        const std::size_t reg = 3;
+        std::size_t i;
+        std::size_t c = 0;
+        out.resize(register_sequence_length);
+        data_type reg3 = _registers[reg] | (1 << 2); // enable temp sensor
 
-void
-rhd2000::command_zcheck(std::vector<short> &out, double frequency, double amplitude)
-{}
+        for (i = 32; i < 35; ++i) out[c++] = convert(i);          // sample aux1-aux3
+        reg3 |= 1 << 3;                                           // sensor 1
+        out[c++] = reg_write(reg, reg3);
 
+        for (i = 32; i < 35; ++i) out[c++] = convert(i);          // sample aux1-aux3
+        reg3 |= 1 << 4;                                           // sensor 1 + 2
+        out[c++] = reg_write(reg, reg3);
+
+        for (i = 32; i < 35; ++i) out[c++] = convert(i);          // sample aux1-aux3
+        out[c++] = convert(49);                                   // sample temp
+
+        for (i = 32; i < 35; ++i) out[c++] = convert(i);          // sample aux1-aux3
+        reg3 &= ~(1 << 4);                                        // sensor 2
+        out[c++] = reg_write(reg, reg3);
+
+        for (i = 32; i < 35; ++i) out[c++] = convert(i);          // sample aux1-aux3
+        out[c++] = convert(49);                                   // sample temp
+
+        for (i = 32; i < 35; ++i) out[c++] = convert(i);          // sample aux1-aux3
+        reg3 &= ~(1 << 3);                                        // sensors off
+        out[c++] = reg_write(reg, reg3);
+
+        for (i = 32; i < 35; ++i) out[c++] = convert(i);          // sample aux1-aux3
+        out[c++] = convert(48);                                   // sample Vdd
+
+        while (c < register_sequence_length) {
+                for (i = 32; i < 35; ++i) out[c++] = convert(i); // sample aux1-aux3
+                out[c++] = reg_read(63);                         // dummy
+        }
+
+        assert(out.size() == register_sequence_length);
+
+}
+
+
+namespace rhd2k {
+
+std::ostream &
+operator<< (std::ostream &o, rhd2000 const &r)
+{
+        if (r.connected()) {
+                if (r.chip_id() == 1) o << "RHD2132";
+                else o << "RHD2116";
+                o << " (die revision= " << r.revision() << ", amplifiers=" << r.namplifiers() << "):";
+        }
+        else {
+                o << "no amplifier connected:";
+        }
+        o << "\n  input bandwidth: " << r.lower_bandwidth() << " - " << r.upper_bandwidth() << " Hz";
+        if (r.dsp_enabled()) o << "\n  dsp highpass: " << r.dsp_cutoff() << " Hz";
+        return o;
+}
+
+}
