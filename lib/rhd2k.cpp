@@ -7,8 +7,11 @@
 #define RH2_DAC1R 10
 #define RH2_DAC2R 11
 #define RL_DAC1R 12
+#define RL_DAC1M 0x7f
 #define RL_DAC2R 13
+#define RL_DAC2M 0x3f
 #define RL_DAC3R 13
+#define RL_DAC3M 0x40
 #define AMP_REGISTER 14
 
 static unsigned char default_registers[] =
@@ -173,16 +176,38 @@ rhd2000::set_upper_bandwidth(double)
 double
 rhd2000::lower_bandwidth() const
 {
-        int rldac1 = _registers[RL_DAC1R] & 0x3f;
-        int rldac2 = _registers[RL_DAC2R] & 0x1f;
-        int rldac3 = _registers[RL_DAC3R] & 0x20;
+        int rldac1 = _registers[RL_DAC1R] & RL_DAC1M;
+        int rldac2 = _registers[RL_DAC2R] & RL_DAC2M;
+        int rldac3 = (_registers[RL_DAC3R] & RL_DAC3M) > 0;
         double rl = RLBase + RLDac1Unit * rldac1 + RLDac2Unit * rldac2 + RLDac3Unit * rldac3;
         return lowerBandwidthFromRL(rl);
 }
 
 void
-rhd2000::set_lower_bandwidth(double)
-{}
+rhd2000::set_lower_bandwidth(double hz)
+{
+        int dac1, dac2, dac3;
+        double target;
+
+        // restrict range to published specs (upper=500 in the doc, but 1500 in code)
+        if (hz < 0.1) hz = 0.1;
+        else if (hz > 1500.0) hz = 1500.0;
+        target = rLFromLowerBandwidth(hz);
+        dac3 = (hz < 0.15);
+        dac2 = floor((target - RLBase - dac3 * RLDac3Unit) / RLDac2Unit);
+        dac1 = floor((target - RLBase - dac3 * RLDac3Unit - dac2 * RLDac2Unit) / RLDac1Unit);
+
+
+        _registers[RL_DAC1R] = (_registers[RL_DAC1R] & 0x80) | (dac1 & RL_DAC1M);
+        _registers[RL_DAC2R] = (_registers[RL_DAC2R] & 0x80) | (dac2 & RL_DAC2M);
+        _registers[RL_DAC3R] = (_registers[RL_DAC2R] & ~RL_DAC3M) | (dac3 << 6);
+
+        // test bit math
+#ifndef NDEBUG
+        double expected = lowerBandwidthFromRL(RLBase + RLDac1Unit * dac1 + RLDac2Unit * dac2 + RLDac3Unit * dac3);
+        assert(lower_bandwidth() == expected);
+#endif
+}
 
 bool
 rhd2000::dsp_enabled() const
@@ -209,9 +234,9 @@ rhd2000::set_dsp_cutoff(double hz)
                 /* 2**n = exp(2 pi omega) / (exp (2 pi omega) - 1) */
                 /* find closest value of n */
                 double q = exp(2 * Pi * hz / _sampling_rate);
-                double n = log2(q / (q - 1));
+                double n = round(log2(q / (q - 1)));
                 if (n < 1) n = 1;
-                _registers[4] = (_registers[4] & 0xe0) | 0x10 | ((unsigned char)round(n) & 0x0f);
+                _registers[4] = (_registers[4] & 0xe0) | 0x10 | ((unsigned char)n & 0x0f);
         }
 
 }

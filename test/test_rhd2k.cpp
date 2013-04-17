@@ -27,9 +27,22 @@ test_dspcutoff()
 
 }
 
+void
+test_lowerbandwidth()
+{
+        const double targets[] = {0.1, 0.5, 1.0, 5.0, 10.0, 50.0, 100.0, 200.0, 500};
+        for (size_t i = 0; i < sizeof(targets) / sizeof(double); ++i) {
+                amp->set_lower_bandwidth(targets[i]);
+                cout << "lower bandwidth: requested=" << targets[i] << " Hz"
+                     << ", got=" << amp->lower_bandwidth() << endl;
+        }
+}
+
+
 int
 main(int, char**)
 {
         amp.reset(new rhd2k::rhd2000(sampling_rate));
         test_dspcutoff();
+        test_lowerbandwidth();
 }
