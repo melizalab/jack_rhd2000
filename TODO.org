@@ -183,7 +183,7 @@ board and the amps - no need to support changes to it in a jack-based system.
 
 this means exposing the rhd2000 objects owned by rhd2000eval
 
-** TODO data memory storage
+** DONE data memory storage
 
 data are copied out of the eval board's fifo in a fairly complex structure whose
 sizes depend on the number of enabled data streams
@@ -211,12 +211,20 @@ There's a discrepancy between my interpretation of the spec and the code in
 rhd2000datablock.cpp: specificially, the auxiliary data comes first in the MISO
 results.
 
-*** TODO change order of returned data in verilog code
+another bit of weirdness - the aux data is shifted by a frame. is the first
+frame corrupted?
+
+p 9 in the manual states that "every MISO result received through the Rhythm
+FPGA corresponds to the MOSI command sent three steps earlier" - so this
+explains why the auxiliary data comes first, and also why the aux data is
+delayed by a frame.
+
+** TODO change order of returned data in verilog code
 
 if it's not impossible, it would be much more convenient to order the returned
 arrays [streams][channels] instead of the way it is now
 
-*** TODO fix little-endian assumptions
+** TODO fix little-endian assumptions
 
 The returned data is little-endian, which works fine reading things directly
 into variables, but there should be some preprocessor macros for when the arch

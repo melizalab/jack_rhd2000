@@ -57,7 +57,7 @@ public:
          * @note implementing classes may handle underruns (i.e. fewer frames
          * available than requested) as determined by the underlying hardware.
          */
-        virtual std::size_t read(char * tgt, std::size_t nframes) = 0;
+        virtual std::size_t read(void * tgt, std::size_t nframes) = 0;
 
         /** the current sampling rate */
         virtual uint sampling_rate() = 0;

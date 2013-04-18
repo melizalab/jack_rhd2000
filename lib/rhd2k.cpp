@@ -304,22 +304,22 @@ rhd2000::connected() const
         return (strncmp("INTAN", reinterpret_cast<char const *>(_registers + 40), 5) == 0);
 }
 
-short
+int
 rhd2000::revision() const
 {
-        return *reinterpret_cast<short const *>(_registers + 60);
+        return _registers[60];
 }
 
-short
+int
 rhd2000::namplifiers() const
 {
-        return *reinterpret_cast<short const *>(_registers + 62);
+        return _registers[62];
 }
 
-short
+int
 rhd2000::chip_id() const
 {
-        return *reinterpret_cast<short const *>(_registers + 63);
+        return _registers[63];
 }
 
 void
@@ -372,38 +372,33 @@ rhd2000::update(void const * data, size_t offset, size_t stride)
 
         // first check for INTAN - if it's not there, there's no amp or the
         // delay is wrong (check command_regset to make sure offset is correct)
-        t = ram_register_count * 2;
-        if ((ptr[stride*t++] != 'I') ||
-            (ptr[stride*t++] != 'N') ||
-            (ptr[stride*t++] != 'T') ||
-            (ptr[stride*t++] != 'A') ||
-            (ptr[stride*t++] != 'N'))
-        {
-                _registers[40] = 0x0; // will make connected() false
-                return;
-        }
-
-        // compare RAM
-        t = ram_register_count;
-        for (reg = 0; reg < ram_register_count; ++reg, ++t) {
-                if (ptr[stride*t] != _registers[reg]) {
-                        std::ostringstream s;
-                        s << "register " << reg << ": expected 0x" << std::hex << _registers[reg]
-                          << "; got 0x" << ptr[stride*t];
-                        throw daq_error(s.str());
-                }
-        }
-        // copy ROM registers
+        // NB: the aux data is delayed by a frame (see p. 9 in the manual)
+        t = ram_register_count * 2 + 1;
         for (reg = 40; reg < 45; ++reg, ++t) {
                 _registers[reg] = ptr[stride*t];
         }
+        if (!connected()) return;
+
+        // compare RAM
+        t = ram_register_count + 1;
+        for (reg = 0; reg < ram_register_count; ++reg, ++t) {
+                // registers 3 and 6 are under control of other command seqs
+                if (reg == 3 || reg == 6) continue;
+                if (ptr[stride*t] != _registers[reg]) {
+                        std::ostringstream s;
+                        s << "register " << reg << ": expected " << _registers[reg]
+                          << "; got " << ptr[stride*t];
+                        throw daq_error(s.str());
+                }
+        }
+        t += 5;
+        // copy ROM registers
         for (reg = 48; reg < 56; ++reg, ++t) {
                 _registers[reg] = ptr[stride*t];
         }
         for (reg = 59; reg < 64; ++reg, ++t) {
                 _registers[reg] = ptr[stride*t];
         }
-        assert(t == register_sequence_length);
 }
 
 
@@ -507,13 +502,17 @@ operator<< (std::ostream &o, rhd2000 const &r)
         if (r.connected()) {
                 if (r.chip_id() == 1) o << "RHD2132";
                 else o << "RHD2116";
-                o << " (die revision= " << r.revision() << ", amplifiers=" << r.namplifiers() << ")";
+                o << " (rev=" << r.revision() << ", amps=" << r.namplifiers() << "):"
+                  << " bandwidth: " << r.lower_bandwidth() << " - " << r.upper_bandwidth() << " Hz"
+                  << "; dsp cutoff: ";
+                if (r.dsp_enabled())
+                        o << r.dsp_cutoff() << " Hz";
+                else
+                        o << "disabled";
         }
         else {
                 o << "no amplifier connected";
         }
-        o << "\n   input bandwidth: " << r.lower_bandwidth() << " - " << r.upper_bandwidth() << " Hz";
-        if (r.dsp_enabled()) o << "\n   dsp highpass: " << r.dsp_cutoff() << " Hz";
         return o;
 }
 

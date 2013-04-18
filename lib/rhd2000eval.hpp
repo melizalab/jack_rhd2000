@@ -74,7 +74,7 @@ public:
          * @note if the RHD2000eval FIFO contains less than the requested number
          * of samples, the last sample in the buffer will be repeated.
          */
-        std::size_t read(char *, std::size_t);
+        std::size_t read(void *, std::size_t);
 
         uint sampling_rate() { return _sampling_rate; }
         uint adc_nchannels();
@@ -84,6 +84,7 @@ public:
         void set_cable_feet(port_id port, double feet) {
                 set_cable_meters(port,  0.03048 * feet);
         }
+        void set_filtering(port_id port, double lower, double upper, double dsp);
 
         template <typename It>
         void upload_auxcommand(auxcmd_slot slot, ulong bank, It first, It last) {
@@ -97,8 +98,8 @@ public:
         void set_auxcommand_length(auxcmd_slot slot, ulong length, ulong loop=0);
         void set_port_auxcommand(port_id port, auxcmd_slot slot, ulong bank);
 
-        int nstreams_enabled();
-        void enable_adc_stream(int stream, bool enabled);
+        std::size_t nstreams_enabled();
+        void enable_adc_stream(std::size_t stream, bool enabled);
 
         void set_leds(int value, int mask);
         void ttl_out(int value, int mask);
@@ -116,7 +117,6 @@ protected:
         bool clock_locked() const;
 
 private:
-        void init_board();
         void reset_board();
         void set_sampling_rate();
         void set_cable_delay(port_id port, uint delay);
@@ -132,7 +132,7 @@ private:
 
         uint _sampling_rate;
         ulong _board_version;
-        std::size_t _active_streams;
+        std::size_t _nactive_streams;
 };
 
 #endif

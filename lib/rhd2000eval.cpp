@@ -59,12 +59,14 @@ enum RhythmEndPoints {
 
 template <typename T>
 static void
-print_channel(char const * data, size_t nframes, size_t offset, size_t stride)
+print_channel(void const * data, size_t nframes, size_t offset, size_t stride)
 {
         T const * ptr;
+        offset /= sizeof(T);
+        stride /= sizeof(T);
         std::cout << offset << ":" << std::hex;
         for (size_t i = 0; i < nframes; ++i) {
-                ptr = reinterpret_cast<T const *>(data + offset + stride*i);
+                ptr = static_cast<T const *>(data) + offset + stride*i;
                 std::cout << " 0x" << *ptr;
                 // printf("%zd: %#hx\n", i, ptr[stride*i]);
         }
@@ -99,7 +101,7 @@ ok_error::what() const throw()
 
 rhd2000eval::rhd2000eval(uint sampling_rate, char const * serial, char const * firmware)
         : _dev(0), _pll(okPLL22393_Construct()), _sampling_rate(sampling_rate),
-          _board_version(0), _active_streams(0)
+          _board_version(0), _nactive_streams(0)
 {
         // allocate storage for the amplifier wrappers. the first amplifier does
         // double duty for setting output
@@ -195,6 +197,20 @@ rhd2000eval::stop()
         okFrontPanel_UpdateWireIns(_dev);
 }
 
+size_t
+rhd2000eval::nstreams_enabled()
+{
+        return _nactive_streams;
+}
+
+void
+rhd2000eval::enable_adc_stream(size_t stream, bool enabled)
+{
+        okFrontPanel_SetWireInValue(_dev, WireInDataStreamEn, enabled << stream, 1 << stream);
+        okFrontPanel_UpdateWireIns(_dev);
+        _nactive_streams += (enabled) ? 1 : -1;
+}
+
 
 std::size_t
 rhd2000eval::nframes_ready()
@@ -208,7 +224,7 @@ rhd2000eval::frame_size()
         // 4 = magic number; 2 = time stamp;
         // 36 = (32 amp channels + 3 aux commands + 1 filler word);
         // 8 = ADCs; 2 = TTL in/out
-        return 2 * (4 + 2 + _active_streams * 36 + 8 + 2 );
+        return 2 * (4 + 2 + _nactive_streams * 36 + 8 + 2 );
 }
 
 ulong
@@ -220,10 +236,10 @@ rhd2000eval::words_in_fifo() const
 }
 
 std::size_t
-rhd2000eval::read(char * arg, std::size_t nframes)
+rhd2000eval::read(void * arg, std::size_t nframes)
 {
         std::size_t bytes = nframes * frame_size();
-        okFrontPanel_ReadFromPipeOut(_dev, PipeOutData, bytes, reinterpret_cast<unsigned char *>(arg));
+        okFrontPanel_ReadFromPipeOut(_dev, PipeOutData, bytes, static_cast<unsigned char *>(arg));
         return nframes;
 }
 
@@ -231,12 +247,7 @@ uint
 rhd2000eval::adc_nchannels()
 {
         // this depends on the number of streams and amps per stream
-        return _active_streams;
-}
-
-void
-rhd2000eval::init_board()
-{
+        return _nactive_streams;
 }
 
 void
@@ -266,11 +277,6 @@ rhd2000eval::reset_board()
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel5678, PortC2 << 4, 0x0f << 4);
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel5678, PortD1 << 8, 0x0f << 8);
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel5678, PortD2 << 12, 0x0f << 12);
-        // enable all data streams
-        // okFrontPanel_SetWireInValue(_dev, WireInDataStreamEn, 0x00ff , ulong_mask);
-        // _active_streams = ninputs;
-        okFrontPanel_SetWireInValue(_dev, WireInDataStreamEn, 0x0001 , ulong_mask);
-        _active_streams = 1;
         okFrontPanel_UpdateWireIns(_dev);
 
         // shut off pipes from input to dacs
@@ -458,7 +464,7 @@ void
 rhd2000eval::scan_amplifiers()
 {
         const std::size_t nframes = rhd2k::rhd2000::register_sequence_length;
-        char * buffer = new char[frame_size() * nframes];
+        char * buffer;
 
         // set the basic command sequences for all ports
         rhd2k::rhd2000 * amp = _ports[0];
@@ -485,16 +491,22 @@ rhd2000eval::scan_amplifiers()
                         set_port_auxcommand((port_id)port, (auxcmd_slot)slot, 0);
                 }
         }
+        // enable all data streams
+        okFrontPanel_SetWireInValue(_dev, WireInDataStreamEn, 0x00ff, ulong_mask);
+        okFrontPanel_UpdateWireIns(_dev);
+        _nactive_streams = ninputs;
 
         // run calibration sequence
         start(nframes);
+        buffer = new char[frame_size() * nframes];
         while(running()) {
                 usleep(1);
         }
 
         //  do some basic sanity checks
         assert(nframes_ready() == nframes);
-        assert(read(buffer, nframes) == nframes);
+        read(buffer, nframes);
+
         // assumes little-endian
         if (*(uint64_t*)buffer != 0xC691199927021942LL) {
                 throw daq_error("received data from board with the wrong header");
@@ -503,11 +515,23 @@ rhd2000eval::scan_amplifiers()
                 throw daq_error("received data with the wrong frame size");
         }
 
-        // inspect a frame in gdb: p/x *(short*)(buffer+12)@(_active_streams*36)
-        print_channel<short>(buffer, nframes, (size_t)16, frame_size());
-        amp->update(buffer, 12+4, frame_size());
-
+        // inspect a frame in gdb: p/x *(short*)(buffer+12)@(_nactive_streams*36)
+        for (size_t stream = 0; stream < ninputs; ++stream) {
+                size_t offset = 2 * (6 + 2 * ninputs + stream);
+#ifndef NDEBUG
+                print_channel<short>(buffer, nframes, offset, frame_size());
+#endif
+                amp = _amplifiers[stream];
+                amp->update(buffer, offset, frame_size());
+                enable_adc_stream(stream, amp->connected());
+        }
         delete[] buffer;
+
+        // turn off calibration sequence
+        for (int port = (int)PortA; port <= (int)PortD; ++port) {
+                set_port_auxcommand((port_id)port, AuxCmd3, 1);
+        }
+
 }
 
 void

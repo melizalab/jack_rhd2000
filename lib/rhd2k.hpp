@@ -81,11 +81,11 @@ public:
         /** True if an amplifier is connected to this port */
         bool connected() const;
         /** The revision number for the RHD2000 die */
-        short revision() const;
+        int revision() const;
         /** The number of amplifiers on the chip */
-        short namplifiers() const;
+        int namplifiers() const;
         /** The chip ID */
-        short chip_id() const;
+        int chip_id() const;
 
         void command_regset(std::vector<short> &out, bool calibrate);
         void command_auxsample(std::vector<short> &out);
