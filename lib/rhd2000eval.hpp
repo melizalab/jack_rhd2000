@@ -77,7 +77,7 @@ public:
         std::size_t read(void *, std::size_t);
 
         std::size_t sampling_rate() const { return _sampling_rate; }
-        std::size_t adc_nchannels() const;
+        std::size_t adc_channels() const;
 
         /* rhd2k eval specific */
         void set_cable_meters(port_id port, double meters);

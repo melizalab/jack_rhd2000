@@ -265,7 +265,7 @@ rhd2000eval::read(void * arg, size_t nframes)
 }
 
 size_t
-rhd2000eval::adc_nchannels() const
+rhd2000eval::adc_channels() const
 {
         // this depends on the number of streams and amps per stream
         size_t ret = 8;         // the eval board ADCs
@@ -684,7 +684,7 @@ operator<< (std::ostream & o, rhd2000eval const & r)
           << "\n Sampling rate: " << r._sampling_rate << " Hz"
           << "\n FIFO data: " << r.words_in_fifo() << '/' << FIFO_CAPACITY_WORDS << " words ("
           << (100.0 * r.words_in_fifo() / FIFO_CAPACITY_WORDS) << "% full)"
-          << "\n Analog inputs enabled: " << r.adc_nchannels()
+          << "\n Analog inputs enabled: " << r.adc_channels()
           << "\n Headstages: ";
         for (size_t i = 0; i < r.ninputs; ++i) {
                 // this assumes the mapping established in reset_board

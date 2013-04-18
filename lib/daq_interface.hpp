@@ -62,7 +62,7 @@ public:
         /** the current sampling rate */
         virtual std::size_t sampling_rate() const = 0;
         /** the number of active analog input channels */
-        virtual std::size_t adc_nchannels() const = 0;
+        virtual std::size_t adc_channels() const = 0;
         /** the number of active analog output channels */
         // virtual std::size_t dac_nchannels() = 0;
 

@@ -16,16 +16,20 @@ int
 main(int, char**)
 {
         char * buffer;
+        float * values;  // [nchan][period_size]
         dev.reset(new rhd2000eval(sampling_rate));
         cout << *dev << endl;
 
-        // stream some data
+        // stream some data and convert it to floats
+        size_t nchannels = dev->adc_channels();
         buffer = new char[dev->frame_size() * period_size];
+        values = new float[nchannels * period_size];
+
         cout << "streaming with frame size " << dev->frame_size() << " bytes" << endl;
         dev->start();
         for (std::size_t period = 0; period < nperiods; ++period) {
                 while (dev->nframes_ready() < period_size) {
-                        usleep(10);
+                        usleep(1);
                 }
                 dev->read(buffer, period_size);
                 cout << "period " << period << ": frame=" << *(uint*)(buffer+8) << endl;

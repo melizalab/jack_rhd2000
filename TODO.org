@@ -215,10 +215,21 @@ FPGA corresponds to the MOSI command sent three steps earlier" - so this
 explains why the auxiliary data comes first, and also why the aux data is
 delayed by a frame.
 
-** TODO change order of returned data in verilog code
+JACK will need the data as floating points, and the data will have to be read
+out using strides. for the headstage data:
 
-if it's not impossible, it would be much more convenient to order the returned
-arrays [streams][channels] instead of the way it is now
+out[chan][t] : (buffer + 16 + (chan+3) * nstreams + stream + t * frame_size)
+
+then for the eval board's adcs:
+
+out[chan][t] = (buffer + 16 + 36 * nstreams + chan + t * frame_size)
+
+there may be an especially efficient way to do the strides, though the
+conversion to floating point prevents any kind of memcpy.
+
+an additional complication is that we don't want to copy out data from amps that
+are disabled.  one option would be to generate a lookup table that maps channels
+to offset. leave this for tomorrow.
 
 ** TODO fix little-endian assumptions
 
