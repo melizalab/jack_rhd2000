@@ -57,14 +57,18 @@ enum RhythmEndPoints {
         PipeOutData = 0xa0
 };
 
+template <typename T>
 static void
 print_channel(char const * data, size_t nframes, size_t offset, size_t stride)
 {
-        stride /= sizeof(short);            // convert to words
-        short const * ptr = reinterpret_cast<short const *>(data) + offset;
+        T const * ptr;
+        std::cout << offset << ":" << std::hex;
         for (size_t i = 0; i < nframes; ++i) {
-                printf("%zd: %#hx\n", i, ptr[stride*i]);
+                ptr = reinterpret_cast<T const *>(data + offset + stride*i);
+                std::cout << " 0x" << *ptr;
+                // printf("%zd: %#hx\n", i, ptr[stride*i]);
         }
+        std::cout << std::dec << std::endl;
 }
 
 
@@ -482,20 +486,26 @@ rhd2000eval::scan_amplifiers()
                 }
         }
 
-        // run calibration sequence and do some basic sanity checks
+        // run calibration sequence
         start(nframes);
         while(running()) {
                 usleep(1);
         }
+
+        //  do some basic sanity checks
         assert(nframes_ready() == nframes);
         assert(read(buffer, nframes) == nframes);
-
+        // assumes little-endian
         if (*(uint64_t*)buffer != 0xC691199927021942LL) {
                 throw daq_error("received data from board with the wrong header");
         }
         if (*(uint64_t*)(buffer+frame_size()) != 0xC691199927021942LL) {
                 throw daq_error("received data with the wrong frame size");
         }
+
+        // inspect a frame in gdb: p/x *(short*)(buffer+12)@(_active_streams*36)
+        print_channel<short>(buffer, nframes, (size_t)16, frame_size());
+        amp->update(buffer, 12+4, frame_size());
 
         delete[] buffer;
 }
@@ -518,7 +528,7 @@ void
 rhd2000eval::set_auxcommand_length(auxcmd_slot slot, ulong length, ulong loop)
 {
         int wire1, wire2;
-        assert (length < 1024);
+        assert (length > 0 && length < 1024);
         assert (loop < 1023);
         switch(slot) {
         case AuxCmd1:

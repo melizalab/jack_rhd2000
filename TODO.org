@@ -190,9 +190,9 @@ sizes depend on the number of enabled data streams
 
 : uint64_t header
 : uint32_t frame
-: short amp_data[32][nstreams]
 : short aux_data[3][nstreams]
-: short filler[nstreams]
+: short amp_data[32][nstreams]
+: short filler[nstreams]  (always zeros)
 : short adc_data[8]
 : short ttl_in
 : short ttl_out
@@ -203,8 +203,21 @@ The logic for dealing with this data include:
 2) traversing an array of frames
 3) reading out elements across frames
 
-However, essentially all we need to know is the size of a frame, which gives the
-stride for reading data across frames.
+Essentially what we need to know is the size of a frame, which gives the stride
+for reading data across frames, and the offset from the start of the frame to a
+given channel
 
 There's a discrepancy between my interpretation of the spec and the code in
-rhd2000datablock.cpp: specificially, the auxiliary data comes first in the MISO results
+rhd2000datablock.cpp: specificially, the auxiliary data comes first in the MISO
+results.
+
+*** TODO change order of returned data in verilog code
+
+if it's not impossible, it would be much more convenient to order the returned
+arrays [streams][channels] instead of the way it is now
+
+*** TODO fix little-endian assumptions
+
+The returned data is little-endian, which works fine reading things directly
+into variables, but there should be some preprocessor macros for when the arch
+is big-endian.

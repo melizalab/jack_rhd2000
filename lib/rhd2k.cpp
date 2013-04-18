@@ -1,8 +1,10 @@
 #include <stdint.h>
 #include <cmath>
 #include <ostream>
+#include <sstream>
 #include <iomanip>
 #include <boost/utility/binary.hpp>
+#include "daq_interface.hpp"
 #include "rhd2k.hpp"
 
 #define RH1_DAC1R 8
@@ -296,13 +298,6 @@ rhd2000::namps_powered() const
         return amp_power().count();
 }
 
-void
-rhd2000::update(void const * data, size_t offset, size_t size)
-{
-        // compare RAM registers
-        // copy ROM registers
-}
-
 bool
 rhd2000::connected() const
 {
@@ -364,6 +359,53 @@ rhd2000::set_sampling_rate_registers()
         _registers[1] = (adcBufferBias & 0x3f) | (_registers[1] & 0xe0);
         _registers[2] = muxBias;
 }
+
+void
+rhd2000::update(void const * data, size_t offset, size_t stride)
+{
+        size_t t;
+        size_t reg;
+        // do the math with short pointers
+        offset /= sizeof(short);
+        stride /= sizeof(short);
+        short const * ptr = reinterpret_cast<short const*>(data) + offset;
+
+        // first check for INTAN - if it's not there, there's no amp or the
+        // delay is wrong (check command_regset to make sure offset is correct)
+        t = ram_register_count * 2;
+        if ((ptr[stride*t++] != 'I') ||
+            (ptr[stride*t++] != 'N') ||
+            (ptr[stride*t++] != 'T') ||
+            (ptr[stride*t++] != 'A') ||
+            (ptr[stride*t++] != 'N'))
+        {
+                _registers[40] = 0x0; // will make connected() false
+                return;
+        }
+
+        // compare RAM
+        t = ram_register_count;
+        for (reg = 0; reg < ram_register_count; ++reg, ++t) {
+                if (ptr[stride*t] != _registers[reg]) {
+                        std::ostringstream s;
+                        s << "register " << reg << ": expected 0x" << std::hex << _registers[reg]
+                          << "; got 0x" << ptr[stride*t];
+                        throw daq_error(s.str());
+                }
+        }
+        // copy ROM registers
+        for (reg = 40; reg < 45; ++reg, ++t) {
+                _registers[reg] = ptr[stride*t];
+        }
+        for (reg = 48; reg < 56; ++reg, ++t) {
+                _registers[reg] = ptr[stride*t];
+        }
+        for (reg = 59; reg < 64; ++reg, ++t) {
+                _registers[reg] = ptr[stride*t];
+        }
+        assert(t == register_sequence_length);
+}
+
 
 void
 rhd2000::command_regset(std::vector<short> &out, bool do_calibrate)
