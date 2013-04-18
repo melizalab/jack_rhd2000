@@ -101,7 +101,7 @@ ok_error::what() const throw()
 
 rhd2000eval::rhd2000eval(uint sampling_rate, char const * serial, char const * firmware)
         : _dev(0), _pll(okPLL22393_Construct()), _sampling_rate(sampling_rate),
-          _board_version(0), _nactive_streams(0)
+          _board_version(0), _enabled_streams(0), _nactive_streams(0)
 {
         // allocate storage for the amplifier wrappers. the first amplifier does
         // double duty for setting output
@@ -206,9 +206,21 @@ rhd2000eval::nstreams_enabled()
 void
 rhd2000eval::enable_adc_stream(size_t stream, bool enabled)
 {
-        okFrontPanel_SetWireInValue(_dev, WireInDataStreamEn, enabled << stream, 1 << stream);
+        // http://graphics.stanford.edu/~seander/bithacks.html#ConditionalSetOrClearBitsWithoutBranching
+        ulong mask = 1 << stream;
+        ulong arg = (_enabled_streams & ~mask) | (-enabled & mask);
+        enable_adc_streams(arg);
+        assert ((_enabled_streams & mask) >> stream == enabled);
+}
+
+void
+rhd2000eval::enable_adc_streams(ulong arg)
+{
+        assert (arg <= 0x00ff);
+        _enabled_streams = arg;
+        _nactive_streams = std::bitset<ninputs>(arg).count();
+        okFrontPanel_SetWireInValue(_dev, WireInDataStreamEn, _enabled_streams, ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
-        _nactive_streams += (enabled) ? 1 : -1;
 }
 
 
@@ -492,9 +504,7 @@ rhd2000eval::scan_amplifiers()
                 }
         }
         // enable all data streams
-        okFrontPanel_SetWireInValue(_dev, WireInDataStreamEn, 0x00ff, ulong_mask);
-        okFrontPanel_UpdateWireIns(_dev);
-        _nactive_streams = ninputs;
+        enable_adc_streams(0x00ff);
 
         // run calibration sequence
         start(nframes);

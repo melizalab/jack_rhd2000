@@ -179,10 +179,6 @@ checking DAC and some registers on the amplifier.
 I implemented this by setting sampling rate in the constructor for the eval
 board and the amps - no need to support changes to it in a jack-based system.
 
-** TODO interface for setting per-amplifier filter and amp power values
-
-this means exposing the rhd2000 objects owned by rhd2000eval
-
 ** DONE data memory storage
 
 data are copied out of the eval board's fifo in a fairly complex structure whose
@@ -229,3 +225,12 @@ arrays [streams][channels] instead of the way it is now
 The returned data is little-endian, which works fine reading things directly
 into variables, but there should be some preprocessor macros for when the arch
 is big-endian.
+
+** TODO test different sampling rates
+
+** TODO infer cable length
+
+** TODO allow user to disable streams with active amps
+
+** TODO allow user to set per-amplifier filter and amp power values
+

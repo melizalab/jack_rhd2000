@@ -124,6 +124,7 @@ private:
 
         void set_cmd_ram(auxcmd_slot slot, ulong bank, ulong index, ulong command);
         ulong words_in_fifo() const;
+        void enable_adc_streams(ulong);
 
         okFrontPanel_HANDLE _dev;
         okPLL22393_HANDLE _pll;
@@ -132,6 +133,7 @@ private:
 
         uint _sampling_rate;
         ulong _board_version;
+        ulong _enabled_streams;
         std::size_t _nactive_streams;
 };
 
