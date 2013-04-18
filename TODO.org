@@ -153,7 +153,6 @@ interface to the eval board, or just write a jack driver?  If a jack driver,
 jack1 or jack2?
 
 
-
 ** base interface
 
 base interfaces should encapsulate a lot, in my opinion, so they can be general.
@@ -176,3 +175,36 @@ configuration will always only happen once.
 a few tricky bits related to the aux command sequences.  setting the sampling
 rate requires regeneration of the command sequences, both for the impedance
 checking DAC and some registers on the amplifier.
+
+I implemented this by setting sampling rate in the constructor for the eval
+board and the amps - no need to support changes to it in a jack-based system.
+
+** TODO interface for setting per-amplifier filter and amp power values
+
+this means exposing the rhd2000 objects owned by rhd2000eval
+
+** TODO data memory storage
+
+data are copied out of the eval board's fifo in a fairly complex structure whose
+sizes depend on the number of enabled data streams
+
+: uint64_t header
+: uint32_t frame
+: short amp_data[32][nstreams]
+: short aux_data[3][nstreams]
+: short filler[nstreams]
+: short adc_data[8]
+: short ttl_in
+: short ttl_out
+
+The logic for dealing with this data include:
+
+1) allocating a frame buffer of the appropriate size
+2) traversing an array of frames
+3) reading out elements across frames
+
+However, essentially all we need to know is the size of a frame, which gives the
+stride for reading data across frames.
+
+There's a discrepancy between my interpretation of the spec and the code in
+rhd2000datablock.cpp: specificially, the auxiliary data comes first in the MISO results

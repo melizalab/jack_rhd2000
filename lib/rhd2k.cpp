@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <cmath>
 #include <ostream>
+#include <iomanip>
 #include <boost/utility/binary.hpp>
 #include "rhd2k.hpp"
 
@@ -20,6 +21,7 @@
 #define RL_DAC3M 0x40
 #define AMP_REGISTER 14
 
+using std::size_t;
 using namespace rhd2k;
 
 static rhd2000::data_type ram_register_defaults[] =
@@ -42,7 +44,7 @@ static rhd2000::data_type ram_register_defaults[] =
   BOOST_BINARY(11111111),      // 16: amps 16-23 enabled
   BOOST_BINARY(11111111)       // 17: amps 23-31 enabled
 };
-static const std::size_t ram_register_count = sizeof(ram_register_defaults);
+static const size_t ram_register_count = sizeof(ram_register_defaults);
 
 static const double RH1Base = 2200.0;
 static const double RH1Dac1Unit = 600.0;
@@ -147,8 +149,7 @@ lowerBandwidthFromRL(double rL)
     return pow(10.0, ((-b - sqrt(b * b - 4 * a * c))/(2 * a)));
 }
 
-
-rhd2000::rhd2000(std::size_t sampling_rate)
+rhd2000::rhd2000(size_t sampling_rate)
         : _sampling_rate(sampling_rate)
 {
         memset(_registers, 0, register_count * sizeof(data_type));
@@ -273,10 +274,10 @@ rhd2000::set_dsp_cutoff(double hz)
 }
 
 void
-rhd2000::set_amp_power(std::size_t channel, bool powered)
+rhd2000::set_amp_power(size_t channel, bool powered)
 {
         assert(channel <= max_amps);
-        std::size_t reg = (channel / 8) + AMP_REGISTER;
+        size_t reg = (channel / 8) + AMP_REGISTER;
         data_type mask = 1 << (channel % 8);
         if (powered) _registers[reg] |= mask;
         else _registers[reg] &= ~mask;
@@ -289,14 +290,14 @@ rhd2000::amp_power() const
         return std::bitset<max_amps>(*reinterpret_cast<uint32_t const *>(_registers+AMP_REGISTER));
 }
 
-std::size_t
+size_t
 rhd2000::namps_powered() const
 {
         return amp_power().count();
 }
 
 void
-rhd2000::update(unsigned char const * data)
+rhd2000::update(void const * data, size_t offset, size_t size)
 {
         // compare RAM registers
         // copy ROM registers
@@ -367,8 +368,8 @@ rhd2000::set_sampling_rate_registers()
 void
 rhd2000::command_regset(std::vector<short> &out, bool do_calibrate)
 {
-        std::size_t reg;
-        std::size_t c = 0;
+        size_t reg;
+        size_t c = 0;
         out.resize(register_sequence_length);
 
         // Start with a few dummy commands in case chip is still powering up
@@ -415,9 +416,9 @@ rhd2000::command_regset(std::vector<short> &out, bool do_calibrate)
 void
 rhd2000::command_auxsample(std::vector<short> &out)
 {
-        const std::size_t reg = 3;
-        std::size_t i;
-        std::size_t c = 0;
+        const size_t reg = 3;
+        size_t i;
+        size_t c = 0;
         out.resize(register_sequence_length);
         data_type reg3 = _registers[reg] | (1 << 2); // enable temp sensor
 
@@ -464,14 +465,43 @@ operator<< (std::ostream &o, rhd2000 const &r)
         if (r.connected()) {
                 if (r.chip_id() == 1) o << "RHD2132";
                 else o << "RHD2116";
-                o << " (die revision= " << r.revision() << ", amplifiers=" << r.namplifiers() << "):";
+                o << " (die revision= " << r.revision() << ", amplifiers=" << r.namplifiers() << ")";
         }
         else {
-                o << "no amplifier connected:";
+                o << "no amplifier connected";
         }
-        o << "\n  input bandwidth: " << r.lower_bandwidth() << " - " << r.upper_bandwidth() << " Hz";
-        if (r.dsp_enabled()) o << "\n  dsp highpass: " << r.dsp_cutoff() << " Hz";
+        o << "\n   input bandwidth: " << r.lower_bandwidth() << " - " << r.upper_bandwidth() << " Hz";
+        if (r.dsp_enabled()) o << "\n   dsp highpass: " << r.dsp_cutoff() << " Hz";
         return o;
+}
+
+std::ostream &
+print_command(std::ostream &o, short cmd)
+{
+        using namespace std;
+        int channel, reg, data;
+        if ((cmd & 0xc000) == 0x0000) {
+                channel = (cmd & 0x3f00) >> 8;
+                o << "CONVERT(" << channel << ")";
+        } else if ((cmd & 0xc000) == 0xc000) {
+                reg = (cmd & 0x3f00) >> 8;
+                o << "READ(" << reg << ")";
+        } else if ((cmd & 0xc000) == 0x8000) {
+                reg = (cmd & 0x3f00) >> 8;
+                data = (cmd & 0x00ff);
+                o << "WRITE(" << reg << ",0x"
+                  << hex << internal << setfill('0') << setw(2)
+                  << data << ")";
+        } else if (cmd == 0x5500) {
+                o << "CALIBRATE";
+        } else if (cmd == 0x6a00) {
+                o << "CLEAR";
+        } else {
+                o << "INVALID COMMAND: 0x";
+                o << hex << internal << setfill('0') << setw(4)
+                  << cmd;
+        }
+        return o << dec;
 }
 
 }

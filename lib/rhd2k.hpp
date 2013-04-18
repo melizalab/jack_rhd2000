@@ -24,6 +24,8 @@ inline short reg_write(unsigned char reg, unsigned char val) {
         return (0x8000 | reg << 8 | val);
 }
 
+std::ostream &
+print_command(std::ostream &, short);
 
 /**
  * Represents a single RHD2000 amplifer.
@@ -40,10 +42,7 @@ public:
         /** the number of commands in the register programming sequence */
         static const std::size_t register_sequence_length = 60;
 
-        static const std::size_t max_command_length = 1024; // this is really
-                                                             // determined by
-                                                             // the FPGA
-        rhd2000(std::size_t sampling_rate);
+        explicit rhd2000(std::size_t sampling_rate);
         ~rhd2000() {}
 
         /* public methods to update register values */
@@ -62,8 +61,22 @@ public:
         std::bitset<max_amps> amp_power() const;
         std::size_t namps_powered() const;
 
-        /** Update internal state with results from regset command. */
-        void update(data_type const * data);
+        /**
+         * Update internal state with results from regset command. Parses
+         * through a block of data recevied from the RHD2000 eval
+         * board.
+         *
+         * @param data    the data block received from the RHD2000 eval board.
+         *                Must be at least register_sequence_length frames long
+         *
+         * @param offset the offset (in words) into the frame to the channel
+         *               containing the results from the regset command
+         *               sequence. If the sequence is loaded in aux command slot
+         *               3, this will be (6 + nstreams * 35 + stream).
+         *
+         * @param size   the size of the frame, in bytes
+         */
+        void update(void const * data, std::size_t offset, std::size_t size);
 
         /** True if an amplifier is connected to this port */
         bool connected() const;

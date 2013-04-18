@@ -1,8 +1,12 @@
-#include <ostream>
-#include "rhd2keval.hpp"
+#include <cstdio>
+#include <math.h>
+#include <iostream>
+#include "rhd2000eval.hpp"
+#include "rhd2k.hpp"
 #include "okFrontPanelDLL.h"
 
 #define MAX_NUM_DATA_STREAMS 8
+static const ulong ulong_mask = 0xffffffff;
 
 enum RhythmEndPoints {
         WireInResetRun = 0x00,
@@ -53,6 +57,17 @@ enum RhythmEndPoints {
         PipeOutData = 0xa0
 };
 
+static void
+print_channel(char const * data, size_t nframes, size_t offset, size_t stride)
+{
+        stride /= sizeof(short);            // convert to words
+        short const * ptr = reinterpret_cast<short const *>(data) + offset;
+        for (size_t i = 0; i < nframes; ++i) {
+                printf("%zd: %#hx\n", i, ptr[stride*i]);
+        }
+}
+
+
 char const *
 ok_error::what() const throw()
 {
@@ -78,10 +93,18 @@ ok_error::what() const throw()
         return buf;
 }
 
-
-rhd2keval::rhd2keval(uint sampling_rate, char const * serial, char const * firmware)
-        : _dev(0), _pll(okPLL22393_Construct()), _sampling_rate(sampling_rate)
+rhd2000eval::rhd2000eval(uint sampling_rate, char const * serial, char const * firmware)
+        : _dev(0), _pll(okPLL22393_Construct()), _sampling_rate(sampling_rate),
+          _board_version(0), _active_streams(0)
 {
+        // allocate storage for the amplifier wrappers. the first amplifier does
+        // double duty for setting output
+        for (std::size_t i = 0; i < ninputs; ++i) {
+                _amplifiers[i] = new rhd2k::rhd2000(_sampling_rate);
+                if (i % 2 == 0) _ports[i/2] = _amplifiers[i];
+        }
+
+        ulong board_id;
         ok_ErrorCode ec;
         if (okFrontPanelDLL_LoadLib(NULL) == false) {
                 throw daq_error("Opal Kelly Front Panel DLL not found");
@@ -103,54 +126,123 @@ rhd2keval::rhd2keval(uint sampling_rate, char const * serial, char const * firmw
         // load fpga firmware if not already configured
         if (okFrontPanel_IsFrontPanelEnabled(_dev)) {
                 okFrontPanel_UpdateWireOuts(_dev);
-                _board_id = okFrontPanel_GetWireOutValue(_dev, WireOutBoardId);
+                board_id = okFrontPanel_GetWireOutValue(_dev, WireOutBoardId);
         }
-        if (_board_id != RHYTHM_BOARD_ID) {
+        if (board_id != RHYTHM_BOARD_ID) {
                 // load the bitfile
                 if (!firmware) firmware = "rhythm_130302.bit";
                 if ((ec = okFrontPanel_ConfigureFPGA(_dev, firmware)) != ok_NoError) {
                         throw ok_error(ec);
                 }
                 okFrontPanel_UpdateWireOuts(_dev);
-                _board_id = okFrontPanel_GetWireOutValue(_dev, WireOutBoardId);
+                board_id = okFrontPanel_GetWireOutValue(_dev, WireOutBoardId);
+                if (board_id != RHYTHM_BOARD_ID) {
+                        throw daq_error("Uploaded FPGA code is not Rhythm");
+                }
         }
         _board_version = okFrontPanel_GetWireOutValue(_dev, WireOutBoardVersion);
 
         reset_board();
         set_sampling_rate();
+        scan_amplifiers();
 }
 
 
-rhd2keval::~rhd2keval()
+rhd2000eval::~rhd2000eval()
 {
+        for (std::size_t i = 0; i < ninputs; ++i) {
+                delete _amplifiers[i];
+        }
         if (_pll) okPLL22393_Destruct(_pll);
         if (_dev) okFrontPanel_Destruct(_dev);
 }
 
 void
-rhd2keval::start(uint max_frames)
-{}
+rhd2000eval::start(uint max_frames)
+{
+        // configure acquisition duration
+        if (max_frames == 0) {
+                okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0x02, 0x02);
+        }
+        else {
+                okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0x00, 0x02);
+                okFrontPanel_SetWireInValue(_dev, WireInMaxTimeStepLsb, max_frames & 0x0000ffff, ulong_mask);
+                okFrontPanel_SetWireInValue(_dev, WireInMaxTimeStepMsb, (max_frames & 0xffff0000) >> 16, ulong_mask);
+        }
+        okFrontPanel_UpdateWireIns(_dev);
+
+        okFrontPanel_ActivateTriggerIn(_dev, TrigInSpiStart, 0);
+}
+
+bool
+rhd2000eval::running()
+{
+        okFrontPanel_UpdateWireOuts(_dev);
+        return (okFrontPanel_GetWireOutValue(_dev, WireOutSpiRunning) & 0x01 == 1);
+}
+
 
 void
-rhd2keval::stop()
-{}
+rhd2000eval::stop()
+{
+        okFrontPanel_SetWireInValue(_dev, WireInMaxTimeStepLsb, 0, ulong_mask);
+        okFrontPanel_SetWireInValue(_dev, WireInMaxTimeStepMsb, 0, ulong_mask);
+        okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0x00, 0x02);
+        okFrontPanel_UpdateWireIns(_dev);
+}
 
 
-void
-rhd2keval::wait(uint frames)
-{}
+std::size_t
+rhd2000eval::nframes_ready()
+{
+        return 2 * words_in_fifo() / frame_size();
+}
+
+std::size_t
+rhd2000eval::frame_size()
+{
+        // 4 = magic number; 2 = time stamp;
+        // 36 = (32 amp channels + 3 aux commands + 1 filler word);
+        // 8 = ADCs; 2 = TTL in/out
+        return 2 * (4 + 2 + _active_streams * 36 + 8 + 2 );
+}
+
+ulong
+rhd2000eval::words_in_fifo() const
+{
+        okFrontPanel_UpdateWireOuts(_dev);
+        return (okFrontPanel_GetWireOutValue(_dev, WireOutNumWordsMsb) << 16) +
+                okFrontPanel_GetWireOutValue(_dev, WireOutNumWordsLsb);
+}
+
+std::size_t
+rhd2000eval::read(char * arg, std::size_t nframes)
+{
+        std::size_t bytes = nframes * frame_size();
+        okFrontPanel_ReadFromPipeOut(_dev, PipeOutData, bytes, reinterpret_cast<unsigned char *>(arg));
+        return nframes;
+}
 
 uint
-rhd2keval::adc_nchannels() { return 0;}
+rhd2000eval::adc_nchannels()
+{
+        // this depends on the number of streams and amps per stream
+        return _active_streams;
+}
 
 void
-rhd2keval::reset_board()
+rhd2000eval::init_board()
+{
+}
+
+void
+rhd2000eval::reset_board()
 {
         // reset
         okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0x0001, 0x0001);
         okFrontPanel_UpdateWireIns(_dev);
         // turn off reset, set some values
-        okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0x0000, 0xffff);
+        okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0x0000, ulong_mask);
         // SPI run continuous [bit 1]
         okFrontPanel_SetWireInValue(_dev, WireInResetRun, 1 << 1, 1 << 1);
         // DSP settle [bit 2] = 1
@@ -161,7 +253,7 @@ rhd2keval::reset_board()
         okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0 << 13, 0xe000);
         okFrontPanel_UpdateWireIns(_dev);
 
-        // wire amps to data streams
+        // wire each amp to its own data stream
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel1234, PortA1 << 0, 0x0f << 0);
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel1234, PortA2 << 4, 0x0f << 4);
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel1234, PortB1 << 8, 0x0f << 8);
@@ -171,27 +263,28 @@ rhd2keval::reset_board()
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel5678, PortD1 << 8, 0x0f << 8);
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel5678, PortD2 << 12, 0x0f << 12);
         // enable all data streams
-        okFrontPanel_SetWireInValue(_dev, WireInDataStreamEn, 0x000f , 0x000f);
+        // okFrontPanel_SetWireInValue(_dev, WireInDataStreamEn, 0x00ff , ulong_mask);
+        // _active_streams = ninputs;
+        okFrontPanel_SetWireInValue(_dev, WireInDataStreamEn, 0x0001 , ulong_mask);
+        _active_streams = 1;
         okFrontPanel_UpdateWireIns(_dev);
 
         // shut off pipes from input to dacs
         for (int i = 0; i < 8; ++i) {
-                okFrontPanel_SetWireInValue(_dev, int(WireInDacSource1) + i, 0x0000, 0xffff);
+                okFrontPanel_SetWireInValue(_dev, int(WireInDacSource1) + i, 0x0000, ulong_mask);
         }
         // set manual values to 0 (mid-range)
-        okFrontPanel_SetWireInValue(_dev, WireInDacManual1, 0x00ef, 0xffff);
-        okFrontPanel_SetWireInValue(_dev, WireInDacManual2, 0x00ef, 0xffff);
+        okFrontPanel_SetWireInValue(_dev, WireInDacManual1, 0x00ef, ulong_mask);
+        okFrontPanel_SetWireInValue(_dev, WireInDacManual2, 0x00ef, ulong_mask);
         // TTL output zeroed
-        okFrontPanel_SetWireInValue(_dev, WireInTtlOut, 0x0000, 0xffff);
+        okFrontPanel_SetWireInValue(_dev, WireInTtlOut, 0x0000, ulong_mask);
         // set LED
-        okFrontPanel_SetWireInValue(_dev, WireInLedDisplay, 0x0001, 0xffff);
-
+        okFrontPanel_SetWireInValue(_dev, WireInLedDisplay, 0x0001, ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
-
 }
 
 void
-rhd2keval::set_sampling_rate()
+rhd2000eval::set_sampling_rate()
 {
         /* from the intan docs
          * Assuming a 100 MHz reference clock is provided to the FPGA, the programmable FPGA clock frequency
@@ -306,16 +399,193 @@ rhd2keval::set_sampling_rate()
         while (!dcm_done()) {}
 
         // Reprogram clock synthesizer
-        okFrontPanel_SetWireInValue(_dev, WireInDataFreqPll, (256 * M + D), 0xffff);
+        okFrontPanel_SetWireInValue(_dev, WireInDataFreqPll, (256 * M + D), ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
         okFrontPanel_ActivateTriggerIn(_dev, TrigInDcmProg, 0);
 
         // Wait for DataClkLocked = 1 before allowing data acquisition to continue
         while (!clock_locked()) {}
+
+        // set delay - which depends on sampling rate
+        for (int port = (int)PortA; port <= (int)PortD; ++port) {
+                set_cable_feet((port_id)port, 3.0);
+        }
+
+}
+
+void
+rhd2000eval::set_cable_delay(port_id port, uint delay)
+{
+        assert (delay < 16);
+        int shift = (int)port * 4;
+        okFrontPanel_SetWireInValue(_dev, WireInMisoDelay, delay << shift, 0x000f << shift);
+        okFrontPanel_UpdateWireIns(_dev);
+}
+
+void
+rhd2000eval::set_cable_meters(port_id port, double len)
+{
+        assert (len > 0);
+        uint delay;
+        double dt, timeDelay;
+        const double speedOfLight = 299792458.0;           // [m/s]
+        const double cableVelocity = 0.67 * speedOfLight;  // propogation velocity on cable is rougly 2/3 the speed of light
+        const double xilinxLvdsOutputDelay = 1.9e-9;       // 1.9 ns Xilinx LVDS output pin delay
+        const double xilinxLvdsInputDelay = 1.4e-9;        // 1.4 ns Xilinx LVDS input pin delay
+        const double rhd2000Delay = 9.0e-9;                // 9.0 ns RHD2000 SCLK-to-MISO delay
+        const double misoSettleTime = 10.0e-9;             // 10.0 ns delay after MISO changes, before we sample it
+
+        dt = 1.0 / (2800.0 * _sampling_rate); // data clock that samples MISO
+                                              // has a rate 35 x 80 = 2800x higher than the sampling rate
+
+        len *= 2.0;                           // round trip distance data must travel on cable
+        timeDelay = len / cableVelocity + xilinxLvdsOutputDelay + rhd2000Delay + xilinxLvdsInputDelay + misoSettleTime;
+
+        delay = std::max((uint)ceil(timeDelay / dt), 1U);
+#ifndef NDEBUG
+        std::cout << "Total delay = " << (1e9 * timeDelay) << " ns"
+                  << " -> MISO delay = " << delay << std::endl;
+#endif
+        // delay of zero is too short (due to I/O delays), even for zero-length cables
+        set_cable_delay(port, delay);
+}
+
+void
+rhd2000eval::scan_amplifiers()
+{
+        const std::size_t nframes = rhd2k::rhd2000::register_sequence_length;
+        char * buffer = new char[frame_size() * nframes];
+
+        // set the basic command sequences for all ports
+        rhd2k::rhd2000 * amp = _ports[0];
+        std::vector<short> commands;
+        // slot 1: write 0's to dac
+        std::vector<double> dac(60,0.0);
+        amp->command_dac(commands, dac.begin(), dac.end());
+        upload_auxcommand(AuxCmd1, 0, commands.begin(), commands.end());
+
+        // slot 2: sample temp, Vdd, aux ADCs
+        amp->command_auxsample(commands);
+        upload_auxcommand(AuxCmd2, 0, commands.begin(), commands.end());
+
+        // slot 3: set registers and calibrate
+        amp->command_regset(commands, true);
+        upload_auxcommand(AuxCmd3, 0, commands.begin(), commands.end());
+        amp->command_regset(commands, false);
+        upload_auxcommand(AuxCmd3, 1, commands.begin(), commands.end());
+        assert(commands.size() == nframes);
+
+        // assign command sequences to ports - uses some shady enum casting
+        for (int port = (int)PortA; port <= (int)PortD; ++port) {
+                for (int slot = (int)AuxCmd1; slot <= (int)AuxCmd3; ++slot) {
+                        set_port_auxcommand((port_id)port, (auxcmd_slot)slot, 0);
+                }
+        }
+
+        // run calibration sequence and do some basic sanity checks
+        start(nframes);
+        while(running()) {
+                usleep(1);
+        }
+        assert(nframes_ready() == nframes);
+        assert(read(buffer, nframes) == nframes);
+
+        if (*(uint64_t*)buffer != 0xC691199927021942LL) {
+                throw daq_error("received data from board with the wrong header");
+        }
+        if (*(uint64_t*)(buffer+frame_size()) != 0xC691199927021942LL) {
+                throw daq_error("received data with the wrong frame size");
+        }
+
+        delete[] buffer;
+}
+
+void
+rhd2000eval::set_cmd_ram(auxcmd_slot slot, ulong bank, ulong index, ulong command)
+{
+        okFrontPanel_SetWireInValue(_dev, WireInCmdRamData, command, ulong_mask);
+        okFrontPanel_SetWireInValue(_dev, WireInCmdRamAddr, index, ulong_mask);
+        okFrontPanel_SetWireInValue(_dev, WireInCmdRamBank, bank, ulong_mask);
+        okFrontPanel_UpdateWireIns(_dev);
+        okFrontPanel_ActivateTriggerIn(_dev, TrigInRamWrite, (int)slot);
+#ifndef NDEBUG
+        std::cout << slot << ":" << bank << " [" << index << "] = ";
+        rhd2k::print_command(std::cout, command) << std::endl;
+#endif
+}
+
+void
+rhd2000eval::set_auxcommand_length(auxcmd_slot slot, ulong length, ulong loop)
+{
+        int wire1, wire2;
+        assert (length < 1024);
+        assert (loop < 1023);
+        switch(slot) {
+        case AuxCmd1:
+                wire1 = WireInAuxCmdLoop1;
+                wire2 = WireInAuxCmdLength1;
+                break;
+        case AuxCmd2:
+                wire1 = WireInAuxCmdLoop2;
+                wire2 = WireInAuxCmdLength2;
+                break;
+        case AuxCmd3:
+                wire1 = WireInAuxCmdLoop3;
+                wire2 = WireInAuxCmdLength3;
+                break;
+        }
+        okFrontPanel_SetWireInValue(_dev, wire1, loop, ulong_mask);
+        // rhythm expects an index, not a length
+        okFrontPanel_SetWireInValue(_dev, wire2, length-1, ulong_mask);
+        okFrontPanel_UpdateWireIns(_dev);
+#ifndef NDEBUG
+        std::cout << slot << ": length=" << length << ", loop=" << loop << std::endl;
+#endif
+
+}
+
+
+void
+rhd2000eval::set_port_auxcommand(port_id port, auxcmd_slot slot, ulong bank)
+{
+        int shift, wire;
+        assert (bank < 16);
+
+        switch (port) {
+        case PortA:
+                shift = 0;
+                break;
+        case PortB:
+                shift = 4;
+                break;
+        case PortC:
+                shift = 8;
+                break;
+        case PortD:
+                shift = 12;
+                break;
+        }
+
+        switch (slot) {
+        case AuxCmd1:
+                wire = WireInAuxCmdBank1;
+                break;
+        case AuxCmd2:
+                wire = WireInAuxCmdBank2;
+                break;
+        case AuxCmd3:
+                wire = WireInAuxCmdBank3;
+                break;
+        }
+        okFrontPanel_SetWireInValue(_dev, wire, bank << shift, 0x000f << shift);
+        okFrontPanel_UpdateWireIns(_dev);
+#ifndef NDEBUG
+        std::cout << "command sequence " << slot << ":" << bank << " -> " << port << std::endl;
+#endif
 }
 
 bool
-rhd2keval::dcm_done() const
+rhd2000eval::dcm_done() const
 {
         ulong value;
         okFrontPanel_UpdateWireOuts(_dev);
@@ -324,7 +594,7 @@ rhd2keval::dcm_done() const
 }
 
 bool
-rhd2keval::clock_locked() const
+rhd2000eval::clock_locked() const
 {
         ulong value;
         okFrontPanel_UpdateWireOuts(_dev);
@@ -333,7 +603,7 @@ rhd2keval::clock_locked() const
 }
 
 std::ostream &
-operator<< (std::ostream & o, rhd2keval const & r)
+operator<< (std::ostream & o, rhd2000eval const & r)
 {
         char buf1[256], buf2[256];
 
@@ -348,6 +618,41 @@ operator<< (std::ostream & o, rhd2keval const & r)
           << '.' << okFrontPanel_GetDeviceMinorVersion(r._dev)
           << "\n FPGA frequency: " << okPLL22393_GetOutputFrequency(r._pll, 0) << " MHz"
           << "\n Rhythm version: " << r._board_version
-          << "\n Sampling rate: " << r._sampling_rate << " Hz";
+          << "\n Sampling rate: " << r._sampling_rate << " Hz"
+          << "\n FIFO data: " << r.words_in_fifo() << " words"
+          << "\nAmplifiers: ";
+        for (std::size_t i = 0; i < r.ninputs; ++i) {
+                o << "\n" << i << ": " <<  *(r._amplifiers[i]);
+        }
         return o;
+}
+
+std::ostream &
+operator<< (std::ostream & o, rhd2000eval::auxcmd_slot slot) {
+        switch(slot) {
+        case rhd2000eval::AuxCmd1:
+                return o << "Aux1";
+        case rhd2000eval::AuxCmd2:
+                return o << "Aux2";
+        case rhd2000eval::AuxCmd3:
+                return o << "Aux3";
+        default:
+                return o << "unknown slot";
+        }
+}
+
+std::ostream &
+operator<< (std::ostream & o, rhd2000eval::port_id port) {
+        switch(port) {
+        case rhd2000eval::PortA:
+                return o << "A";
+        case rhd2000eval::PortB:
+                return o << "B";
+        case rhd2000eval::PortC:
+                return o << "C";
+        case rhd2000eval::PortD:
+                return o << "D";
+        default:
+                return o << "unknown port";
+        }
 }

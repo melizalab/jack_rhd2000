@@ -33,18 +33,31 @@ public:
          */
         virtual void start(uint max_frames=0) = 0;
 
+        /** true if data acqusition is in process */
+        virtual bool running() = 0;
+
         /** Stop data collection */
         virtual void stop() = 0;
 
+        /** the number of frames available in the interface's buffer */
+        virtual std::size_t nframes_ready() = 0;
+
+        /** the number of bytes per frame */
+        virtual std::size_t frame_size() = 0;
+
         /**
-         * Wait until there are at least @a frames of data collected.
+         * Copy data from the interface into memory
          *
-         * @pre the interface is runing
+         * @param tgt       the target memory. must have at least nframes times
+         *                  bytes_per_frame() allocated
+         * @param nframes   the requested number of frames.
+         *
+         * @return the number of frames written to @tgt
+         *
+         * @note implementing classes may handle underruns (i.e. fewer frames
+         * available than requested) as determined by the underlying hardware.
          */
-        virtual void wait(uint frames) = 0;
-
-        // virtual void * read(uint frames) = 0;
-
+        virtual std::size_t read(char * tgt, std::size_t nframes) = 0;
 
         /** the current sampling rate */
         virtual uint sampling_rate() = 0;
