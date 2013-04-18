@@ -31,7 +31,7 @@ public:
          * @param max_frames   the number of frames of data to collect, or 0 to
          *                     run continuously
          */
-        virtual void start(uint max_frames=0) = 0;
+        virtual void start(std::size_t max_frames=0) = 0;
 
         /** true if data acqusition is in process */
         virtual bool running() = 0;
@@ -60,11 +60,11 @@ public:
         virtual std::size_t read(void * tgt, std::size_t nframes) = 0;
 
         /** the current sampling rate */
-        virtual uint sampling_rate() = 0;
+        virtual std::size_t sampling_rate() const = 0;
         /** the number of active analog input channels */
-        virtual uint adc_nchannels() = 0;
+        virtual std::size_t adc_nchannels() const = 0;
         /** the number of active analog output channels */
-        // virtual uint dac_nchannels() = 0;
+        // virtual std::size_t dac_nchannels() = 0;
 
 };
 

@@ -6,7 +6,10 @@
 #include "okFrontPanelDLL.h"
 
 #define MAX_NUM_DATA_STREAMS 8
+#define FIFO_CAPACITY_WORDS 67108864
 static const ulong ulong_mask = 0xffffffff;
+
+using std::size_t;
 
 enum RhythmEndPoints {
         WireInResetRun = 0x00,
@@ -99,13 +102,13 @@ ok_error::what() const throw()
         return buf;
 }
 
-rhd2000eval::rhd2000eval(uint sampling_rate, char const * serial, char const * firmware)
+rhd2000eval::rhd2000eval(size_t sampling_rate, char const * serial, char const * firmware)
         : _dev(0), _pll(okPLL22393_Construct()), _sampling_rate(sampling_rate),
           _board_version(0), _enabled_streams(0), _nactive_streams(0)
 {
         // allocate storage for the amplifier wrappers. the first amplifier does
         // double duty for setting output
-        for (std::size_t i = 0; i < ninputs; ++i) {
+        for (size_t i = 0; i < ninputs; ++i) {
                 _amplifiers[i] = new rhd2k::rhd2000(_sampling_rate);
                 if (i % 2 == 0) _ports[i/2] = _amplifiers[i];
         }
@@ -156,7 +159,7 @@ rhd2000eval::rhd2000eval(uint sampling_rate, char const * serial, char const * f
 
 rhd2000eval::~rhd2000eval()
 {
-        for (std::size_t i = 0; i < ninputs; ++i) {
+        for (size_t i = 0; i < ninputs; ++i) {
                 delete _amplifiers[i];
         }
         if (_pll) okPLL22393_Destruct(_pll);
@@ -164,7 +167,7 @@ rhd2000eval::~rhd2000eval()
 }
 
 void
-rhd2000eval::start(uint max_frames)
+rhd2000eval::start(size_t max_frames)
 {
         // configure acquisition duration
         if (max_frames == 0) {
@@ -198,23 +201,29 @@ rhd2000eval::stop()
 }
 
 size_t
-rhd2000eval::nstreams_enabled()
+rhd2000eval::streams_enabled() const
 {
         return _nactive_streams;
 }
 
+bool
+rhd2000eval::stream_enabled(size_t stream) const
+{
+        return ((_enabled_streams & (1 << stream)) != 0);
+}
+
 void
-rhd2000eval::enable_adc_stream(size_t stream, bool enabled)
+rhd2000eval::enable_stream(size_t stream, bool enabled)
 {
         // http://graphics.stanford.edu/~seander/bithacks.html#ConditionalSetOrClearBitsWithoutBranching
         ulong mask = 1 << stream;
         ulong arg = (_enabled_streams & ~mask) | (-enabled & mask);
-        enable_adc_streams(arg);
-        assert ((_enabled_streams & mask) >> stream == enabled);
+        enable_streams(arg);
+        assert (stream_enabled(stream) == enabled);
 }
 
 void
-rhd2000eval::enable_adc_streams(ulong arg)
+rhd2000eval::enable_streams(ulong arg)
 {
         assert (arg <= 0x00ff);
         _enabled_streams = arg;
@@ -224,13 +233,13 @@ rhd2000eval::enable_adc_streams(ulong arg)
 }
 
 
-std::size_t
+size_t
 rhd2000eval::nframes_ready()
 {
         return 2 * words_in_fifo() / frame_size();
 }
 
-std::size_t
+size_t
 rhd2000eval::frame_size()
 {
         // 4 = magic number; 2 = time stamp;
@@ -247,19 +256,25 @@ rhd2000eval::words_in_fifo() const
                 okFrontPanel_GetWireOutValue(_dev, WireOutNumWordsLsb);
 }
 
-std::size_t
-rhd2000eval::read(void * arg, std::size_t nframes)
+size_t
+rhd2000eval::read(void * arg, size_t nframes)
 {
-        std::size_t bytes = nframes * frame_size();
+        size_t bytes = nframes * frame_size();
         okFrontPanel_ReadFromPipeOut(_dev, PipeOutData, bytes, static_cast<unsigned char *>(arg));
         return nframes;
 }
 
-uint
-rhd2000eval::adc_nchannels()
+size_t
+rhd2000eval::adc_nchannels() const
 {
         // this depends on the number of streams and amps per stream
-        return _nactive_streams;
+        size_t ret = 8;         // the eval board ADCs
+        for (size_t i = 0; i < ninputs; ++i) {
+                if (stream_enabled(i)) {
+                        ret += _amplifiers[i]->amps_powered();
+                }
+        }
+        return ret;
 }
 
 void
@@ -475,7 +490,7 @@ rhd2000eval::set_cable_meters(port_id port, double len)
 void
 rhd2000eval::scan_amplifiers()
 {
-        const std::size_t nframes = rhd2k::rhd2000::register_sequence_length;
+        const size_t nframes = rhd2k::rhd2000::register_sequence_length;
         char * buffer;
 
         // set the basic command sequences for all ports
@@ -504,7 +519,7 @@ rhd2000eval::scan_amplifiers()
                 }
         }
         // enable all data streams
-        enable_adc_streams(0x00ff);
+        enable_streams(0x00ff);
 
         // run calibration sequence
         start(nframes);
@@ -533,7 +548,7 @@ rhd2000eval::scan_amplifiers()
 #endif
                 amp = _amplifiers[stream];
                 amp->update(buffer, offset, frame_size());
-                enable_adc_stream(stream, amp->connected());
+                enable_stream(stream, amp->connected());
         }
         delete[] buffer;
 
@@ -663,10 +678,15 @@ operator<< (std::ostream & o, rhd2000eval const & r)
           << "\n FPGA frequency: " << okPLL22393_GetOutputFrequency(r._pll, 0) << " MHz"
           << "\n Rhythm version: " << r._board_version
           << "\n Sampling rate: " << r._sampling_rate << " Hz"
-          << "\n FIFO data: " << r.words_in_fifo() << " words"
-          << "\nAmplifiers: ";
-        for (std::size_t i = 0; i < r.ninputs; ++i) {
-                o << "\n" << i << ": " <<  *(r._amplifiers[i]);
+          << "\n FIFO data: " << r.words_in_fifo() << '/' << FIFO_CAPACITY_WORDS << " words ("
+          << (100.0 * r.words_in_fifo() / FIFO_CAPACITY_WORDS) << "% full)"
+          << "\n Analog inputs enabled: " << r.adc_nchannels()
+          << "\n Headstages: ";
+        for (size_t i = 0; i < r.ninputs; ++i) {
+                // this assumes the mapping established in reset_board
+                o << "\n" << (rhd2000eval::input_id)i;
+                if (!r.stream_enabled(i)) o << " (off)";
+                o << ": " <<  *(r._amplifiers[i]);
         }
         return o;
 }
@@ -698,5 +718,29 @@ operator<< (std::ostream & o, rhd2000eval::port_id port) {
                 return o << "D";
         default:
                 return o << "unknown port";
+        }
+}
+
+std::ostream &
+operator<< (std::ostream & o, rhd2000eval::input_id source) {
+        switch(source) {
+        case rhd2000eval::PortA1:
+                return o << "A1";
+        case rhd2000eval::PortB1:
+                return o << "B1";
+        case rhd2000eval::PortC1:
+                return o << "C1";
+        case rhd2000eval::PortD1:
+                return o << "D1";
+        case rhd2000eval::PortA2:
+                return o << "A2";
+        case rhd2000eval::PortB2:
+                return o << "B2";
+        case rhd2000eval::PortC2:
+                return o << "C2";
+        case rhd2000eval::PortD2:
+                return o << "D2";
+        default:
+                return o << "unknown input";
         }
 }

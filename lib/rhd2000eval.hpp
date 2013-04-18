@@ -40,7 +40,7 @@ public:
                 AuxCmd3 = 2
         };
 
-        enum datasource_id {
+        enum input_id {
                 PortA1 = 0,
                 PortA2 = 1,
                 PortB1 = 2,
@@ -59,11 +59,11 @@ public:
                 PortD2Ddr = 15
         };
 
-        rhd2000eval(uint sampling_rate, char const * serial=0, char const * firmware=0);
+        rhd2000eval(std::size_t sampling_rate, char const * serial=0, char const * firmware=0);
         ~rhd2000eval();
 
         /* daq_interface virtual member functions */
-        void start(uint max_frames=0);
+        void start(std::size_t max_frames=0);
         bool running();
         void stop();
         std::size_t nframes_ready();
@@ -76,8 +76,8 @@ public:
          */
         std::size_t read(void *, std::size_t);
 
-        uint sampling_rate() { return _sampling_rate; }
-        uint adc_nchannels();
+        std::size_t sampling_rate() const { return _sampling_rate; }
+        std::size_t adc_nchannels() const;
 
         /* rhd2k eval specific */
         void set_cable_meters(port_id port, double meters);
@@ -85,6 +85,7 @@ public:
                 set_cable_meters(port,  0.03048 * feet);
         }
         void set_filtering(port_id port, double lower, double upper, double dsp);
+        void set_amp_power(port_id port, ulong mask);
 
         template <typename It>
         void upload_auxcommand(auxcmd_slot slot, ulong bank, It first, It last) {
@@ -98,8 +99,9 @@ public:
         void set_auxcommand_length(auxcmd_slot slot, ulong length, ulong loop=0);
         void set_port_auxcommand(port_id port, auxcmd_slot slot, ulong bank);
 
-        std::size_t nstreams_enabled();
-        void enable_adc_stream(std::size_t stream, bool enabled);
+        std::size_t streams_enabled() const ;
+        bool stream_enabled(std::size_t stream) const;
+        void enable_stream(std::size_t stream, bool enabled);
 
         void set_leds(int value, int mask);
         void ttl_out(int value, int mask);
@@ -111,6 +113,8 @@ public:
         friend std::ostream & operator<< (std::ostream &, rhd2000eval const &);
         friend std::ostream & operator<< (std::ostream &, auxcmd_slot);
         friend std::ostream & operator<< (std::ostream &, port_id);
+        friend std::ostream & operator<< (std::ostream &, input_id);
+
 
 protected:
         bool dcm_done() const;
@@ -124,7 +128,7 @@ private:
 
         void set_cmd_ram(auxcmd_slot slot, ulong bank, ulong index, ulong command);
         ulong words_in_fifo() const;
-        void enable_adc_streams(ulong);
+        void enable_streams(ulong);
 
         okFrontPanel_HANDLE _dev;
         okPLL22393_HANDLE _pll;

@@ -59,7 +59,7 @@ public:
 
         void set_amp_power(std::size_t channel, bool powered);
         std::bitset<max_amps> amp_power() const;
-        std::size_t namps_powered() const;
+        std::size_t amps_powered() const;
 
         /**
          * Update internal state with results from regset command. Parses
@@ -83,7 +83,7 @@ public:
         /** The revision number for the RHD2000 die */
         int revision() const;
         /** The number of amplifiers on the chip */
-        int namplifiers() const;
+        int amps() const;
         /** The chip ID */
         int chip_id() const;
 

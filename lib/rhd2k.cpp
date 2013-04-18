@@ -293,7 +293,7 @@ rhd2000::amp_power() const
 }
 
 size_t
-rhd2000::namps_powered() const
+rhd2000::amps_powered() const
 {
         return amp_power().count();
 }
@@ -311,7 +311,7 @@ rhd2000::revision() const
 }
 
 int
-rhd2000::namplifiers() const
+rhd2000::amps() const
 {
         return _registers[62];
 }
@@ -502,7 +502,7 @@ operator<< (std::ostream &o, rhd2000 const &r)
         if (r.connected()) {
                 if (r.chip_id() == 1) o << "RHD2132";
                 else o << "RHD2116";
-                o << " (rev=" << r.revision() << ", amps=" << r.namplifiers() << "):"
+                o << " (rev=" << r.revision() << ", amps=" << r.amps_powered() << '/' << r.amps() << "):"
                   << " bandwidth: " << r.lower_bandwidth() << " - " << r.upper_bandwidth() << " Hz"
                   << "; dsp cutoff: ";
                 if (r.dsp_enabled())
