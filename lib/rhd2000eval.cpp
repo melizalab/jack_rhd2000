@@ -457,6 +457,9 @@ rhd2000eval::set_cable_delay(port_id port, uint delay)
         int shift = (int)port * 4;
         okFrontPanel_SetWireInValue(_dev, WireInMisoDelay, delay << shift, 0x000f << shift);
         okFrontPanel_UpdateWireIns(_dev);
+#ifndef NDEBUG
+        std::cout << port << ": MISO delay = " << delay << std::endl;
+#endif
 }
 
 void
@@ -480,8 +483,7 @@ rhd2000eval::set_cable_meters(port_id port, double len)
 
         delay = std::max((uint)ceil(timeDelay / dt), 1U);
 #ifndef NDEBUG
-        std::cout << "Total delay = " << (1e9 * timeDelay) << " ns"
-                  << " -> MISO delay = " << delay << std::endl;
+        std::cout << port << ": delay = " << (1e9 * timeDelay) << " ns" << std::endl;
 #endif
         // delay of zero is too short (due to I/O delays), even for zero-length cables
         set_cable_delay(port, delay);
@@ -491,6 +493,7 @@ void
 rhd2000eval::scan_amplifiers()
 {
         const size_t nframes = rhd2k::rhd2000::register_sequence_length;
+        size_t frame_bytes;
         char * buffer;
 
         // set the basic command sequences for all ports
@@ -520,10 +523,11 @@ rhd2000eval::scan_amplifiers()
         }
         // enable all data streams
         enable_streams(0x00ff);
+        frame_bytes = frame_size(); // need to cache as frame_size() will change
 
         // run calibration sequence
         start(nframes);
-        buffer = new char[frame_size() * nframes];
+        buffer = new char[frame_bytes * nframes];
         while(running()) {
                 usleep(1);
         }
@@ -536,7 +540,7 @@ rhd2000eval::scan_amplifiers()
         if (*(uint64_t*)buffer != 0xC691199927021942LL) {
                 throw daq_error("received data from board with the wrong header");
         }
-        if (*(uint64_t*)(buffer+frame_size()) != 0xC691199927021942LL) {
+        if (*(uint64_t*)(buffer+frame_bytes) != 0xC691199927021942LL) {
                 throw daq_error("received data with the wrong frame size");
         }
 
@@ -544,10 +548,10 @@ rhd2000eval::scan_amplifiers()
         for (size_t stream = 0; stream < ninputs; ++stream) {
                 size_t offset = 2 * (6 + 2 * ninputs + stream);
 #ifndef NDEBUG
-                print_channel<short>(buffer, nframes, offset, frame_size());
+                print_channel<short>(buffer, nframes, offset, frame_bytes);
 #endif
                 amp = _amplifiers[stream];
-                amp->update(buffer, offset, frame_size());
+                amp->update(buffer, offset, frame_bytes);
                 enable_stream(stream, amp->connected());
         }
         delete[] buffer;
@@ -684,9 +688,9 @@ operator<< (std::ostream & o, rhd2000eval const & r)
           << "\n Headstages: ";
         for (size_t i = 0; i < r.ninputs; ++i) {
                 // this assumes the mapping established in reset_board
-                o << "\n" << (rhd2000eval::input_id)i;
-                if (!r.stream_enabled(i)) o << " (off)";
-                o << ": " <<  *(r._amplifiers[i]);
+                o << "\n" << (rhd2000eval::input_id)i << ": ";
+                if (!r.stream_enabled(i)) o << "(off) ";
+                o <<  *(r._amplifiers[i]);
         }
         return o;
 }

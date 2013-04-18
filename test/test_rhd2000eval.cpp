@@ -21,6 +21,7 @@ main(int, char**)
 
         // stream some data
         buffer = new char[dev->frame_size() * period_size];
+        cout << "streaming with frame size " << dev->frame_size() << " bytes" << endl;
         dev->start();
         for (std::size_t period = 0; period < nperiods; ++period) {
                 while (dev->nframes_ready() < period_size) {
