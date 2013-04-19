@@ -11,7 +11,6 @@ typedef void* okPLL22393_HANDLE;
 
 namespace rhd2k {
         class rhd2000;
-}
 
 struct ok_error : public daq_error {
         int _code;
@@ -19,7 +18,7 @@ struct ok_error : public daq_error {
         char const * what() const throw();
 };
 
-class rhd2000eval : public daq_interface {
+class evalboard : public daq_interface {
 
 public:
         // number of output ports (= number of MOSI lines)
@@ -59,16 +58,18 @@ public:
                 PortD2Ddr = 15
         };
 
-        rhd2000eval(std::size_t sampling_rate, char const * serial=0, char const * firmware=0);
-        ~rhd2000eval();
+        evalboard(std::size_t sampling_rate, char const * serial=0, char const * firmware=0);
+        ~evalboard();
 
         /* daq_interface virtual member functions */
         void start(std::size_t max_frames=0);
         bool running();
         void stop();
         std::size_t nframes_ready();
-        std::size_t frame_size();
-        std::size_t channel_offset(std::size_t chan);
+        std::size_t frame_size() const;
+        std::size_t sampling_rate() const { return _sampling_rate; }
+        std::size_t adc_channels() const;
+        std::size_t adc_offset(std::size_t) const;
 
         /*
          * @overload daq_interface::read()
@@ -78,14 +79,17 @@ public:
          */
         std::size_t read(void *, std::size_t);
 
-        std::size_t sampling_rate() const { return _sampling_rate; }
-        std::size_t adc_channels() const;
 
         /* rhd2k eval specific */
+
+        /** set the cable length in meters for a port */
         void set_cable_meters(port_id port, double meters);
+
+        /** set the cable length in feet for a port */
         void set_cable_feet(port_id port, double feet) {
                 set_cable_meters(port,  0.03048 * feet);
         }
+
         /**
          * Configure the RHD2000 chips on a port. This command will only take
          * effect the next time the amplifier is used.
@@ -104,8 +108,31 @@ public:
         void configure_port(port_id port, double lower, double upper,
                             double dsp, ulong amp_power=0xffffffff);
 
-        void scan_amplifiers();
+        /**
+         * Scan ports for connected RHD2000 chips. The amplifiers will be
+         * calibrated and progammed with the values set in configure_port().
+         *
+         * @pre !running()
+         */
+        void scan_ports();
 
+        /** the number of streams that have been enabled */
+        std::size_t streams_enabled() const ;
+        /** true if a stream is enabled */
+        bool stream_enabled(std::size_t stream) const;
+        /** enable or disable a stream for data collection */
+        void enable_stream(std::size_t stream, bool enabled);
+
+        void set_leds(ulong value, ulong mask=0xffffffff);
+        void ttl_out(ulong value, ulong mask=0xffffffff);
+        ulong ttl_in() const;
+
+        void dac_monitor_stream(int dac, int stream, int channel);
+        void enable_dac_monitor(int dac, bool enabled);
+
+        friend std::ostream & operator<< (std::ostream &, evalboard const &);
+
+protected:
         template <typename It>
         void upload_auxcommand(auxcmd_slot slot, ulong bank, It first, It last) {
                 assert (bank < 16);
@@ -118,24 +145,6 @@ public:
         void set_auxcommand_length(auxcmd_slot slot, ulong length, ulong loop=0);
         void set_port_auxcommand(port_id port, auxcmd_slot slot, ulong bank);
 
-        std::size_t streams_enabled() const ;
-        bool stream_enabled(std::size_t stream) const;
-        void enable_stream(std::size_t stream, bool enabled);
-
-        void set_leds(int value, int mask);
-        void ttl_out(int value, int mask);
-        int ttl_in();
-
-        void dac_monitor_stream(int dac, int stream, int channel);
-        void enable_dac_monitor(int dac, bool enabled);
-
-        friend std::ostream & operator<< (std::ostream &, rhd2000eval const &);
-        friend std::ostream & operator<< (std::ostream &, auxcmd_slot);
-        friend std::ostream & operator<< (std::ostream &, port_id);
-        friend std::ostream & operator<< (std::ostream &, input_id);
-
-
-protected:
         bool dcm_done() const;
         bool clock_locked() const;
         void set_cmd_ram(auxcmd_slot slot, ulong bank, ulong index, ulong command);
@@ -151,11 +160,19 @@ private:
         okPLL22393_HANDLE _pll;
         rhd2k::rhd2000 * _ports[nports];
         rhd2k::rhd2000 * _amplifiers[ninputs];
+        double _cable_lengths[nports];
 
         uint _sampling_rate;
         ulong _board_version;
         ulong _enabled_streams;
         std::size_t _nactive_streams;
 };
+
+std::ostream & operator<< (std::ostream &, evalboard::auxcmd_slot);
+std::ostream & operator<< (std::ostream &, evalboard::port_id);
+std::ostream & operator<< (std::ostream &, evalboard::input_id);
+
+
+} // namespace
 
 #endif

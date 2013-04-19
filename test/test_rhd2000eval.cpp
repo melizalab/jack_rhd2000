@@ -4,12 +4,13 @@
 #include <boost/shared_ptr.hpp>
 #include "rhd2000eval.hpp"
 
+using namespace rhd2k;
 using namespace std;
 
 static const size_t sampling_rate = 30000;
 static const size_t period_size = 1024;
 static const size_t nperiods = 20;
-boost::shared_ptr<rhd2000eval> dev;
+boost::shared_ptr<evalboard> dev;
 
 
 int
@@ -17,9 +18,9 @@ main(int, char**)
 {
         char * buffer;
         float * values;  // [nchan][period_size]
-        dev.reset(new rhd2000eval(sampling_rate));
-        dev->configure_port(rhd2000eval::PortA, 100, 3000, 1, 0x0000ffff);
-        dev->scan_amplifiers();
+        dev.reset(new evalboard(sampling_rate));
+        dev->configure_port(evalboard::PortA, 100, 3000, 1, 0x0000ffff);
+        dev->scan_ports();
 
         cout << *dev << endl;
 

@@ -179,7 +179,7 @@ checking DAC and some registers on the amplifier.
 I implemented this by setting sampling rate in the constructor for the eval
 board and the amps - no need to support changes to it in a jack-based system.
 
-** DONE data memory storage
+** TODO data memory storage
 
 data are copied out of the eval board's fifo in a fairly complex structure whose
 sizes depend on the number of enabled data streams
@@ -244,5 +244,5 @@ is big-endian.
 
 ** TODO allow user to disable streams with active amps
 
-** TODO allow user to set per-amplifier filter and amp power values
+** DONE allow user to set per-amplifier filter and amp power values
 

@@ -9,7 +9,6 @@ typedef unsigned long ulong;
 
 struct daq_error : public std::runtime_error {
         daq_error(std::string const & w) : std::runtime_error(w) {}
-        // error codes?
 };
 
 /**
@@ -42,9 +41,6 @@ public:
         /** the number of frames available in the interface's buffer */
         virtual std::size_t nframes_ready() = 0;
 
-        /** the number of bytes per frame */
-        virtual std::size_t frame_size() = 0;
-
         /**
          * Copy data from the interface into memory
          *
@@ -61,10 +57,18 @@ public:
 
         /** the current sampling rate */
         virtual std::size_t sampling_rate() const = 0;
+
+        /** the number of bytes per frame */
+        virtual std::size_t frame_size() const = 0;
+
+        /** the byte offset of an analog input channel's data in a frame */
+        virtual std::size_t adc_offset(std::size_t channel) const = 0;
+
         /** the number of active analog input channels */
-        virtual std::size_t adc_channels() const = 0;
+        virtual std::size_t adc_channels() { return 0; }
+
         /** the number of active analog output channels */
-        // virtual std::size_t dac_nchannels() = 0;
+        virtual std::size_t dac_nchannels() { return 0; }
 
 };
 

@@ -10,6 +10,7 @@
 static const ulong ulong_mask = 0xffffffff;
 
 using std::size_t;
+using namespace rhd2k;
 
 enum RhythmEndPoints {
         WireInResetRun = 0x00,
@@ -102,14 +103,14 @@ ok_error::what() const throw()
         return buf;
 }
 
-rhd2000eval::rhd2000eval(size_t sampling_rate, char const * serial, char const * firmware)
+evalboard::evalboard(size_t sampling_rate, char const * serial, char const * firmware)
         : _dev(0), _pll(okPLL22393_Construct()), _sampling_rate(sampling_rate),
           _board_version(0), _enabled_streams(0), _nactive_streams(0)
 {
         // allocate storage for the amplifier wrappers. the first amplifier does
         // double duty for setting output
         for (size_t i = 0; i < ninputs; ++i) {
-                _amplifiers[i] = new rhd2k::rhd2000(_sampling_rate);
+                _amplifiers[i] = new rhd2000(_sampling_rate);
                 if (i % 2 == 0) _ports[i/2] = _amplifiers[i];
         }
 
@@ -121,7 +122,7 @@ rhd2000eval::rhd2000eval(size_t sampling_rate, char const * serial, char const *
 
         _dev = okFrontPanel_Construct();
         if (okFrontPanel_GetDeviceCount(_dev) == 0) {
-                throw daq_error("No connected Opal Kelly devices");
+                throw daq_error("no connected Opal Kelly devices");
         }
         if ((ec = okFrontPanel_OpenBySerial(_dev, serial)) != ok_NoError) {
                 throw ok_error(ec);
@@ -146,7 +147,7 @@ rhd2000eval::rhd2000eval(size_t sampling_rate, char const * serial, char const *
                 okFrontPanel_UpdateWireOuts(_dev);
                 board_id = okFrontPanel_GetWireOutValue(_dev, WireOutBoardId);
                 if (board_id != RHYTHM_BOARD_ID) {
-                        throw daq_error("Uploaded FPGA code is not Rhythm");
+                        throw daq_error("uploaded FPGA code is not Rhythm");
                 }
         }
         _board_version = okFrontPanel_GetWireOutValue(_dev, WireOutBoardVersion);
@@ -156,7 +157,7 @@ rhd2000eval::rhd2000eval(size_t sampling_rate, char const * serial, char const *
 }
 
 
-rhd2000eval::~rhd2000eval()
+evalboard::~evalboard()
 {
         for (size_t i = 0; i < ninputs; ++i) {
                 delete _amplifiers[i];
@@ -166,7 +167,7 @@ rhd2000eval::~rhd2000eval()
 }
 
 void
-rhd2000eval::start(size_t max_frames)
+evalboard::start(size_t max_frames)
 {
         // configure acquisition duration
         if (max_frames == 0) {
@@ -183,7 +184,7 @@ rhd2000eval::start(size_t max_frames)
 }
 
 bool
-rhd2000eval::running()
+evalboard::running()
 {
         okFrontPanel_UpdateWireOuts(_dev);
         return (okFrontPanel_GetWireOutValue(_dev, WireOutSpiRunning) & 0x01 == 1);
@@ -191,7 +192,7 @@ rhd2000eval::running()
 
 
 void
-rhd2000eval::stop()
+evalboard::stop()
 {
         okFrontPanel_SetWireInValue(_dev, WireInMaxTimeStepLsb, 0, ulong_mask);
         okFrontPanel_SetWireInValue(_dev, WireInMaxTimeStepMsb, 0, ulong_mask);
@@ -200,19 +201,19 @@ rhd2000eval::stop()
 }
 
 size_t
-rhd2000eval::streams_enabled() const
+evalboard::streams_enabled() const
 {
         return _nactive_streams;
 }
 
 bool
-rhd2000eval::stream_enabled(size_t stream) const
+evalboard::stream_enabled(size_t stream) const
 {
         return ((_enabled_streams & (1 << stream)) != 0);
 }
 
 void
-rhd2000eval::enable_stream(size_t stream, bool enabled)
+evalboard::enable_stream(size_t stream, bool enabled)
 {
         // http://graphics.stanford.edu/~seander/bithacks.html#ConditionalSetOrClearBitsWithoutBranching
         ulong mask = 1 << stream;
@@ -222,7 +223,7 @@ rhd2000eval::enable_stream(size_t stream, bool enabled)
 }
 
 void
-rhd2000eval::enable_streams(ulong arg)
+evalboard::enable_streams(ulong arg)
 {
         assert (arg <= 0x00ff);
         _enabled_streams = arg;
@@ -231,15 +232,14 @@ rhd2000eval::enable_streams(ulong arg)
         okFrontPanel_UpdateWireIns(_dev);
 }
 
-
 size_t
-rhd2000eval::nframes_ready()
+evalboard::nframes_ready()
 {
         return 2 * words_in_fifo() / frame_size();
 }
 
 size_t
-rhd2000eval::frame_size()
+evalboard::frame_size() const
 {
         // 4 = magic number; 2 = time stamp;
         // 36 = (32 amp channels + 3 aux commands + 1 filler word);
@@ -248,7 +248,7 @@ rhd2000eval::frame_size()
 }
 
 ulong
-rhd2000eval::words_in_fifo() const
+evalboard::words_in_fifo() const
 {
         okFrontPanel_UpdateWireOuts(_dev);
         return (okFrontPanel_GetWireOutValue(_dev, WireOutNumWordsMsb) << 16) +
@@ -256,7 +256,7 @@ rhd2000eval::words_in_fifo() const
 }
 
 size_t
-rhd2000eval::read(void * arg, size_t nframes)
+evalboard::read(void * arg, size_t nframes)
 {
         size_t bytes = nframes * frame_size();
         okFrontPanel_ReadFromPipeOut(_dev, PipeOutData, bytes, static_cast<unsigned char *>(arg));
@@ -264,7 +264,7 @@ rhd2000eval::read(void * arg, size_t nframes)
 }
 
 size_t
-rhd2000eval::adc_channels() const
+evalboard::adc_channels() const
 {
         // this depends on the number of streams and amps per stream
         size_t ret = 8;         // the eval board ADCs
@@ -276,8 +276,14 @@ rhd2000eval::adc_channels() const
         return ret;
 }
 
+size_t
+evalboard::adc_offset(size_t chan) const
+{
+        return 12;
+}
+
 void
-rhd2000eval::reset_board()
+evalboard::reset_board()
 {
         // reset
         okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0x0001, 0x0001);
@@ -303,6 +309,8 @@ rhd2000eval::reset_board()
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel5678, PortC2 << 4, 0x0f << 4);
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel5678, PortD1 << 8, 0x0f << 8);
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamSel5678, PortD2 << 12, 0x0f << 12);
+        // turn off LEDs
+        okFrontPanel_SetWireInValue(_dev, WireInLedDisplay, 0, ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
 
         // shut off pipes from input to dacs
@@ -314,12 +322,10 @@ rhd2000eval::reset_board()
         okFrontPanel_SetWireInValue(_dev, WireInDacManual2, 0x00ef, ulong_mask);
         // TTL output zeroed
         okFrontPanel_SetWireInValue(_dev, WireInTtlOut, 0x0000, ulong_mask);
-        // set LED
-        okFrontPanel_SetWireInValue(_dev, WireInLedDisplay, 0x0001, ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
 
         // set the basic command sequences for all ports
-        rhd2k::rhd2000 * amp = _ports[0];
+        rhd2000 * amp = _ports[0];
         std::vector<short> commands;
         // slot 1: write 0's to dac
         std::vector<double> dac(60,0.0);
@@ -341,64 +347,14 @@ rhd2000eval::reset_board()
 }
 
 void
-rhd2000eval::set_sampling_rate()
+evalboard::set_sampling_rate()
 {
-        /* from the intan docs
-         * Assuming a 100 MHz reference clock is provided to the FPGA, the programmable FPGA clock frequency
-         * is given by:
-         *
-         *       FPGA internal clock frequency = 100 MHz * (M/D) / 2
-         *
-         * M and D are "multiply" and "divide" integers used in the FPGA's digital clock manager (DCM) phase-
-         * locked loop (PLL) frequency synthesizer, and are subject to the following restrictions:
-         *
-         *                M must have a value in the range of 2 - 256
-         *                D must have a value in the range of 1 - 256
-         *                M/D must fall in the range of 0.05 - 3.33
-         *
-         * (See pages 85-86 of Xilinx document UG382 "Spartan-6 FPGA Clocking Resources" for more details.)
-         *
-         * This variable-frequency clock drives the state machine that controls all SPI communication
-         * with the RHD2000 chips.  A complete SPI cycle (consisting of one CS pulse and 16 SCLK pulses)
-         * takes 80 clock cycles.  The SCLK period is 4 clock cycles; the CS pulse is high for 14 clock
-         * cycles between commands.
-         *
-         * Rhythm samples all 32 channels and then executes 3 "auxiliary" commands that can be used to read
-         * and write from other registers on the chip, or to sample from the temperature sensor or auxiliary ADC
-         * inputs, for example.  Therefore, a complete cycle that samples from each amplifier channel takes
-         * 80 * (32 + 3) = 80 * 35 = 2800 clock cycles.
-         *
-         * So the per-channel sampling rate of each amplifier is 2800 times slower than the clock frequency.
-         *
-         * Based on these design choices, we can use the following values of M and D to generate the following
-         * useful amplifier sampling rates for electrophsyiological applications:
-         *
-         *   M    D     clkout frequency    per-channel sample rate     per-channel sample period
-         *  ---  ---    ----------------    -----------------------     -------------------------
-         *    7  125          2.80 MHz               1.00 kS/s                 1000.0 usec = 1.0 msec
-         *    7  100          3.50 MHz               1.25 kS/s                  800.0 usec
-         *   21  250          4.20 MHz               1.50 kS/s                  666.7 usec
-         *   14  125          5.60 MHz               2.00 kS/s                  500.0 usec
-         *   35  250          7.00 MHz               2.50 kS/s                  400.0 usec
-         *   21  125          8.40 MHz               3.00 kS/s                  333.3 usec
-         *   14   75          9.33 MHz               3.33 kS/s                  300.0 usec
-         *   28  125         11.20 MHz               4.00 kS/s                  250.0 usec
-         *    7   25         14.00 MHz               5.00 kS/s                  200.0 usec
-         *    7   20         17.50 MHz               6.25 kS/s                  160.0 usec
-         *  112  250         22.40 MHz               8.00 kS/s                  125.0 usec
-         *   14   25         28.00 MHz              10.00 kS/s                  100.0 usec
-         *    7   10         35.00 MHz              12.50 kS/s                   80.0 usec
-         *   21   25         42.00 MHz              15.00 kS/s                   66.7 usec
-         *   28   25         56.00 MHz              20.00 kS/s                   50.0 usec
-         *   35   25         70.00 MHz              25.00 kS/s                   40.0 usec
-         *   42   25         84.00 MHz              30.00 kS/s                   33.3 usec
-         *
-         * To set a new clock frequency, assert new values for M and D (e.g., using okWireIn modules) and
-         * pulse DCM_prog_trigger high (e.g., using an okTriggerIn module).  If this module is reset, it
-         * reverts to a per-channel sampling rate of 30.0 kS/s.
-         */
+        if (running()) {
+                throw daq_error("can't set sampling rate on running interface");
+        }
 
         ulong M, D;
+        /* see intan docs for how sampling rate is set */
         if (_sampling_rate < 1125) { // 1000 Hz
                 M = 7;
                 D = 125;
@@ -471,7 +427,7 @@ rhd2000eval::set_sampling_rate()
 }
 
 void
-rhd2000eval::set_cable_delay(port_id port, uint delay)
+evalboard::set_cable_delay(port_id port, uint delay)
 {
         assert (delay < 16);
         int shift = (int)port * 4;
@@ -483,7 +439,7 @@ rhd2000eval::set_cable_delay(port_id port, uint delay)
 }
 
 void
-rhd2000eval::set_cable_meters(port_id port, double len)
+evalboard::set_cable_meters(port_id port, double len)
 {
         assert (len > 0);
         uint delay;
@@ -495,28 +451,31 @@ rhd2000eval::set_cable_meters(port_id port, double len)
         const double rhd2000Delay = 9.0e-9;                // 9.0 ns RHD2000 SCLK-to-MISO delay
         const double misoSettleTime = 10.0e-9;             // 10.0 ns delay after MISO changes, before we sample it
 
+        _cable_lengths[(size_t)port] = len;                // store cable length
+                                                           // if SR changes
+
         dt = 1.0 / (2800.0 * _sampling_rate); // data clock that samples MISO
                                               // has a rate 35 x 80 = 2800x higher than the sampling rate
 
         len *= 2.0;                           // round trip distance data must travel on cable
         timeDelay = len / cableVelocity + xilinxLvdsOutputDelay + rhd2000Delay + xilinxLvdsInputDelay + misoSettleTime;
 
+        // delay of zero is too short (due to I/O delays), even for zero-length cables
         delay = std::max((uint)ceil(timeDelay / dt), 1U);
 #if DEBUG == 2
         std::cout << port << ": delay = " << (1e9 * timeDelay) << " ns" << std::endl;
 #endif
-        // delay of zero is too short (due to I/O delays), even for zero-length cables
         set_cable_delay(port, delay);
 }
 
 void
-rhd2000eval::configure_port(port_id port, double lower, double upper,
+evalboard::configure_port(port_id port, double lower, double upper,
                            double dsp, ulong amp_power)
 {
         if (running()) {
-                throw daq_error("cannot configure port while system is running");
+                throw daq_error("can't configure port while system is running");
         }
-        rhd2k::rhd2000 * amp = _ports[(size_t)port];
+        rhd2000 * amp = _ports[(size_t)port];
         amp->set_lower_bandwidth(lower);
         amp->set_upper_bandwidth(upper);
         amp->set_dsp_cutoff(dsp);
@@ -530,11 +489,14 @@ rhd2000eval::configure_port(port_id port, double lower, double upper,
 }
 
 void
-rhd2000eval::scan_amplifiers()
+evalboard::scan_ports()
 {
-        const size_t nframes = rhd2k::rhd2000::register_sequence_length;
+        if (running()) {
+                throw daq_error("can't scan ports while system is running");
+        }
+        const size_t nframes = rhd2000::register_sequence_length;
         std::vector<short> commands(nframes);
-        rhd2k::rhd2000 * port;
+        rhd2000 * port;
         size_t frame_bytes;
         char * buffer;
 
@@ -581,6 +543,9 @@ rhd2000eval::scan_amplifiers()
         }
         delete[] buffer;
 
+        // indicate which ports are connected with LED
+        set_leds(_enabled_streams);
+
         // turn off calibration sequence
         for (size_t i = (size_t)PortA; i <= (size_t)PortD; ++i) {
                 port = _ports[i];
@@ -590,7 +555,7 @@ rhd2000eval::scan_amplifiers()
 }
 
 void
-rhd2000eval::set_cmd_ram(auxcmd_slot slot, ulong bank, ulong index, ulong command)
+evalboard::set_cmd_ram(auxcmd_slot slot, ulong bank, ulong index, ulong command)
 {
         okFrontPanel_SetWireInValue(_dev, WireInCmdRamData, command, ulong_mask);
         okFrontPanel_SetWireInValue(_dev, WireInCmdRamAddr, index, ulong_mask);
@@ -599,12 +564,12 @@ rhd2000eval::set_cmd_ram(auxcmd_slot slot, ulong bank, ulong index, ulong comman
         okFrontPanel_ActivateTriggerIn(_dev, TrigInRamWrite, (int)slot);
 #if DEBUG == 2
         std::cout << slot << ":" << bank << " [" << index << "] = ";
-        rhd2k::print_command(std::cout, command) << std::endl;
+        print_command(std::cout, command) << std::endl;
 #endif
 }
 
 void
-rhd2000eval::set_auxcommand_length(auxcmd_slot slot, ulong length, ulong loop)
+evalboard::set_auxcommand_length(auxcmd_slot slot, ulong length, ulong loop)
 {
         int wire1, wire2;
         assert (length > 0 && length < 1024);
@@ -635,7 +600,7 @@ rhd2000eval::set_auxcommand_length(auxcmd_slot slot, ulong length, ulong loop)
 
 
 void
-rhd2000eval::set_port_auxcommand(port_id port, auxcmd_slot slot, ulong bank)
+evalboard::set_port_auxcommand(port_id port, auxcmd_slot slot, ulong bank)
 {
         int shift, wire;
         assert (bank < 16);
@@ -674,7 +639,7 @@ rhd2000eval::set_port_auxcommand(port_id port, auxcmd_slot slot, ulong bank)
 }
 
 bool
-rhd2000eval::dcm_done() const
+evalboard::dcm_done() const
 {
         ulong value;
         okFrontPanel_UpdateWireOuts(_dev);
@@ -683,7 +648,7 @@ rhd2000eval::dcm_done() const
 }
 
 bool
-rhd2000eval::clock_locked() const
+evalboard::clock_locked() const
 {
         ulong value;
         okFrontPanel_UpdateWireOuts(_dev);
@@ -691,8 +656,34 @@ rhd2000eval::clock_locked() const
         return ((value & 0x0001) > 0);
 }
 
+void
+evalboard::set_leds(ulong value, ulong mask)
+{
+        assert (value <= 0xff);
+        okFrontPanel_SetWireInValue(_dev, WireInLedDisplay, value, mask);
+        okFrontPanel_UpdateWireIns(_dev);
+}
+
+void
+evalboard::ttl_out(ulong value, ulong mask)
+{
+        assert (value <= 0xffff);
+        okFrontPanel_SetWireInValue(_dev, WireInTtlOut, value, mask);
+        okFrontPanel_UpdateWireIns(_dev);
+}
+
+ulong
+evalboard::ttl_in() const
+{
+        okFrontPanel_UpdateWireOuts(_dev);
+        return okFrontPanel_GetWireOutValue(_dev, WireOutTtlIn);
+}
+
+
+namespace rhd2k {
+
 std::ostream &
-operator<< (std::ostream & o, rhd2000eval const & r)
+operator<< (std::ostream & o, evalboard const & r)
 {
         char buf1[256], buf2[256];
 
@@ -714,21 +705,25 @@ operator<< (std::ostream & o, rhd2000eval const & r)
           << "\n Headstages: ";
         for (size_t i = 0; i < r.ninputs; ++i) {
                 // this assumes the mapping established in reset_board
-                o << "\n" << (rhd2000eval::input_id)i << ": ";
+                o << "\n" << (evalboard::input_id)i << ": "
+                  <<  *(r._amplifiers[i]);
                 if (!r.stream_enabled(i)) o << "(off) ";
-                o <<  *(r._amplifiers[i]);
+                else {
+                        sprintf(buf1, " (cable %.3f m)", r._cable_lengths[i/2]);
+                        o << buf1;
+                }
         }
         return o;
 }
 
 std::ostream &
-operator<< (std::ostream & o, rhd2000eval::auxcmd_slot slot) {
+operator<< (std::ostream & o, evalboard::auxcmd_slot slot) {
         switch(slot) {
-        case rhd2000eval::AuxCmd1:
+        case evalboard::AuxCmd1:
                 return o << "Aux1";
-        case rhd2000eval::AuxCmd2:
+        case evalboard::AuxCmd2:
                 return o << "Aux2";
-        case rhd2000eval::AuxCmd3:
+        case evalboard::AuxCmd3:
                 return o << "Aux3";
         default:
                 return o << "unknown slot";
@@ -736,15 +731,15 @@ operator<< (std::ostream & o, rhd2000eval::auxcmd_slot slot) {
 }
 
 std::ostream &
-operator<< (std::ostream & o, rhd2000eval::port_id port) {
+operator<< (std::ostream & o, evalboard::port_id port) {
         switch(port) {
-        case rhd2000eval::PortA:
+        case evalboard::PortA:
                 return o << "A";
-        case rhd2000eval::PortB:
+        case evalboard::PortB:
                 return o << "B";
-        case rhd2000eval::PortC:
+        case evalboard::PortC:
                 return o << "C";
-        case rhd2000eval::PortD:
+        case evalboard::PortD:
                 return o << "D";
         default:
                 return o << "unknown port";
@@ -752,25 +747,27 @@ operator<< (std::ostream & o, rhd2000eval::port_id port) {
 }
 
 std::ostream &
-operator<< (std::ostream & o, rhd2000eval::input_id source) {
+operator<< (std::ostream & o, evalboard::input_id source) {
         switch(source) {
-        case rhd2000eval::PortA1:
+        case evalboard::PortA1:
                 return o << "A1";
-        case rhd2000eval::PortB1:
+        case evalboard::PortB1:
                 return o << "B1";
-        case rhd2000eval::PortC1:
+        case evalboard::PortC1:
                 return o << "C1";
-        case rhd2000eval::PortD1:
+        case evalboard::PortD1:
                 return o << "D1";
-        case rhd2000eval::PortA2:
+        case evalboard::PortA2:
                 return o << "A2";
-        case rhd2000eval::PortB2:
+        case evalboard::PortB2:
                 return o << "B2";
-        case rhd2000eval::PortC2:
+        case evalboard::PortC2:
                 return o << "C2";
-        case rhd2000eval::PortD2:
+        case evalboard::PortD2:
                 return o << "D2";
         default:
                 return o << "unknown input";
         }
+}
+
 }
