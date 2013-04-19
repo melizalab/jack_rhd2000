@@ -229,7 +229,8 @@ conversion to floating point prevents any kind of memcpy.
 
 an additional complication is that we don't want to copy out data from amps that
 are disabled.  one option would be to generate a lookup table that maps channels
-to offset. leave this for tomorrow.
+to offset, which would be pretty fast to iterate through, and could be
+regenerated whenever the user changes stream or amplifier activation state.
 
 ** TODO fix little-endian assumptions
 

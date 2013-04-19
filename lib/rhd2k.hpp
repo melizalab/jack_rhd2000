@@ -58,6 +58,7 @@ public:
         void set_dsp_cutoff(double);
 
         void set_amp_power(std::size_t channel, bool powered);
+        void set_amp_power(unsigned long mask);
         std::bitset<max_amps> amp_power() const;
         std::size_t amps_powered() const;
 
@@ -87,11 +88,10 @@ public:
         /** The chip ID */
         int chip_id() const;
 
-        void command_regset(std::vector<short> &out, bool calibrate);
-        void command_auxsample(std::vector<short> &out);
-
+        void command_regset(std::vector<short> &out, bool calibrate) const ;
+        void command_auxsample(std::vector<short> &out) const;
         template <typename InputIterator>
-        void command_dac(std::vector<short> & out, InputIterator first, InputIterator last);
+        void command_dac(std::vector<short> & out, InputIterator first, InputIterator last) const;
 
         friend std::ostream & operator<< (std::ostream &, rhd2000 const &);
 
@@ -106,7 +106,7 @@ private:
 
 template <typename InputIterator>
 void
-rhd2000::command_dac(std::vector<short> & out, InputIterator first, InputIterator last)
+rhd2000::command_dac(std::vector<short> & out, InputIterator first, InputIterator last) const
 {
         out.clear();
         for (InputIterator it = first; it != last; ++it) {

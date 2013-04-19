@@ -68,6 +68,8 @@ public:
         void stop();
         std::size_t nframes_ready();
         std::size_t frame_size();
+        std::size_t channel_offset(std::size_t chan);
+
         /*
          * @overload daq_interface::read()
          *
@@ -84,8 +86,25 @@ public:
         void set_cable_feet(port_id port, double feet) {
                 set_cable_meters(port,  0.03048 * feet);
         }
-        void set_filtering(port_id port, double lower, double upper, double dsp);
-        void set_amp_power(port_id port, ulong mask);
+        /**
+         * Configure the RHD2000 chips on a port. This command will only take
+         * effect the next time the amplifier is used.
+         *
+         * @pre  !running()
+         *
+         * @param port        the port to modify
+         * @param lower       the requested lower cutoff frequency
+         * @param upper       the requested upper cutoff frequency
+         * @param dsp         the requested cutoff freq. for the dsp,
+         *                    or 0 to disable
+         * @param amp_power   a bit mask setting the power state for the
+         *                    amplifiers (e.g. 0x0000ffff will turn on the
+         *                    16 channels and turn off the last 16.
+         */
+        void configure_port(port_id port, double lower, double upper,
+                            double dsp, ulong amp_power=0xffffffff);
+
+        void scan_amplifiers();
 
         template <typename It>
         void upload_auxcommand(auxcmd_slot slot, ulong bank, It first, It last) {
@@ -119,16 +138,14 @@ public:
 protected:
         bool dcm_done() const;
         bool clock_locked() const;
+        void set_cmd_ram(auxcmd_slot slot, ulong bank, ulong index, ulong command);
+        ulong words_in_fifo() const;
+        void enable_streams(ulong);
 
 private:
         void reset_board();
         void set_sampling_rate();
         void set_cable_delay(port_id port, uint delay);
-        void scan_amplifiers();
-
-        void set_cmd_ram(auxcmd_slot slot, ulong bank, ulong index, ulong command);
-        ulong words_in_fifo() const;
-        void enable_streams(ulong);
 
         okFrontPanel_HANDLE _dev;
         okPLL22393_HANDLE _pll;

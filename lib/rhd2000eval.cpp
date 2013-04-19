@@ -153,7 +153,6 @@ rhd2000eval::rhd2000eval(size_t sampling_rate, char const * serial, char const *
 
         reset_board();
         set_sampling_rate();
-        scan_amplifiers();
 }
 
 
@@ -318,6 +317,27 @@ rhd2000eval::reset_board()
         // set LED
         okFrontPanel_SetWireInValue(_dev, WireInLedDisplay, 0x0001, ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
+
+        // set the basic command sequences for all ports
+        rhd2k::rhd2000 * amp = _ports[0];
+        std::vector<short> commands;
+        // slot 1: write 0's to dac
+        std::vector<double> dac(60,0.0);
+        amp->command_dac(commands, dac.begin(), dac.end());
+        upload_auxcommand(AuxCmd1, 0, commands.begin(), commands.end());
+        for (int port = (int)PortA; port <= (int)PortD; ++port) {
+        }
+
+        // slot 2: sample temp, Vdd, aux ADCs
+        amp->command_auxsample(commands);
+        upload_auxcommand(AuxCmd2, 0, commands.begin(), commands.end());
+
+        // assign command sequences to ports with some shady enum casting
+        for (int port = (int)PortA; port <= (int)PortD; ++port) {
+                set_port_auxcommand((port_id)port, AuxCmd1, 0);
+                set_port_auxcommand((port_id)port, AuxCmd2, 0);
+        }
+
 }
 
 void
@@ -444,7 +464,7 @@ rhd2000eval::set_sampling_rate()
         while (!clock_locked()) {}
 
         // set delay - which depends on sampling rate
-        for (int port = (int)PortA; port <= (int)PortD; ++port) {
+        for (size_t port = (size_t)PortA; port <= (size_t)PortD; ++port) {
                 set_cable_feet((port_id)port, 3.0);
         }
 
@@ -457,7 +477,7 @@ rhd2000eval::set_cable_delay(port_id port, uint delay)
         int shift = (int)port * 4;
         okFrontPanel_SetWireInValue(_dev, WireInMisoDelay, delay << shift, 0x000f << shift);
         okFrontPanel_UpdateWireIns(_dev);
-#ifndef NDEBUG
+#if DEBUG == 2
         std::cout << port << ": MISO delay = " << delay << std::endl;
 #endif
 }
@@ -482,7 +502,7 @@ rhd2000eval::set_cable_meters(port_id port, double len)
         timeDelay = len / cableVelocity + xilinxLvdsOutputDelay + rhd2000Delay + xilinxLvdsInputDelay + misoSettleTime;
 
         delay = std::max((uint)ceil(timeDelay / dt), 1U);
-#ifndef NDEBUG
+#if DEBUG == 2
         std::cout << port << ": delay = " << (1e9 * timeDelay) << " ns" << std::endl;
 #endif
         // delay of zero is too short (due to I/O delays), even for zero-length cables
@@ -490,37 +510,42 @@ rhd2000eval::set_cable_meters(port_id port, double len)
 }
 
 void
+rhd2000eval::configure_port(port_id port, double lower, double upper,
+                           double dsp, ulong amp_power)
+{
+        if (running()) {
+                throw daq_error("cannot configure port while system is running");
+        }
+        rhd2k::rhd2000 * amp = _ports[(size_t)port];
+        amp->set_lower_bandwidth(lower);
+        amp->set_upper_bandwidth(upper);
+        amp->set_dsp_cutoff(dsp);
+        amp->set_amp_power(amp_power);
+
+        // upload new command sequence for this register
+        std::vector<short> commands;
+        amp->command_regset(commands, false);
+        upload_auxcommand(AuxCmd3, (size_t)port, commands.begin(), commands.end());
+        set_port_auxcommand(port, AuxCmd3, (size_t)port); // not really necessary
+}
+
+void
 rhd2000eval::scan_amplifiers()
 {
         const size_t nframes = rhd2k::rhd2000::register_sequence_length;
+        std::vector<short> commands(nframes);
+        rhd2k::rhd2000 * port;
         size_t frame_bytes;
         char * buffer;
 
-        // set the basic command sequences for all ports
-        rhd2k::rhd2000 * amp = _ports[0];
-        std::vector<short> commands;
-        // slot 1: write 0's to dac
-        std::vector<double> dac(60,0.0);
-        amp->command_dac(commands, dac.begin(), dac.end());
-        upload_auxcommand(AuxCmd1, 0, commands.begin(), commands.end());
-
-        // slot 2: sample temp, Vdd, aux ADCs
-        amp->command_auxsample(commands);
-        upload_auxcommand(AuxCmd2, 0, commands.begin(), commands.end());
-
-        // slot 3: set registers and calibrate
-        amp->command_regset(commands, true);
-        upload_auxcommand(AuxCmd3, 0, commands.begin(), commands.end());
-        amp->command_regset(commands, false);
-        upload_auxcommand(AuxCmd3, 1, commands.begin(), commands.end());
-        assert(commands.size() == nframes);
-
-        // assign command sequences to ports - uses some shady enum casting
-        for (int port = (int)PortA; port <= (int)PortD; ++port) {
-                for (int slot = (int)AuxCmd1; slot <= (int)AuxCmd3; ++slot) {
-                        set_port_auxcommand((port_id)port, (auxcmd_slot)slot, 0);
-                }
+        // upload calibration sequences to slot 3 - diff bank for each port
+        for (size_t i = (size_t)PortA; i <= (size_t)PortD; ++i) {
+                port = _ports[i];
+                port->command_regset(commands, true);
+                upload_auxcommand(AuxCmd3, i, commands.begin(), commands.end());
+                set_port_auxcommand((port_id)i, AuxCmd3, i);
         }
+
         // enable all data streams
         enable_streams(0x00ff);
         frame_bytes = frame_size(); // need to cache as frame_size() will change
@@ -547,20 +572,21 @@ rhd2000eval::scan_amplifiers()
         // inspect a frame in gdb: p/x *(short*)(buffer+12)@(_nactive_streams*36)
         for (size_t stream = 0; stream < ninputs; ++stream) {
                 size_t offset = 2 * (6 + 2 * ninputs + stream);
-#ifndef NDEBUG
+#if DEBUG == 2
                 print_channel<short>(buffer, nframes, offset, frame_bytes);
 #endif
-                amp = _amplifiers[stream];
-                amp->update(buffer, offset, frame_bytes);
-                enable_stream(stream, amp->connected());
+                port = _amplifiers[stream]; // pointer does double duty for amps
+                port->update(buffer, offset, frame_bytes);
+                enable_stream(stream, port->connected());
         }
         delete[] buffer;
 
         // turn off calibration sequence
-        for (int port = (int)PortA; port <= (int)PortD; ++port) {
-                set_port_auxcommand((port_id)port, AuxCmd3, 1);
+        for (size_t i = (size_t)PortA; i <= (size_t)PortD; ++i) {
+                port = _ports[i];
+                port->command_regset(commands, false);
+                upload_auxcommand(AuxCmd3, i, commands.begin(), commands.end());
         }
-
 }
 
 void
@@ -571,7 +597,7 @@ rhd2000eval::set_cmd_ram(auxcmd_slot slot, ulong bank, ulong index, ulong comman
         okFrontPanel_SetWireInValue(_dev, WireInCmdRamBank, bank, ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
         okFrontPanel_ActivateTriggerIn(_dev, TrigInRamWrite, (int)slot);
-#ifndef NDEBUG
+#if DEBUG == 2
         std::cout << slot << ":" << bank << " [" << index << "] = ";
         rhd2k::print_command(std::cout, command) << std::endl;
 #endif
@@ -601,7 +627,7 @@ rhd2000eval::set_auxcommand_length(auxcmd_slot slot, ulong length, ulong loop)
         // rhythm expects an index, not a length
         okFrontPanel_SetWireInValue(_dev, wire2, length-1, ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
-#ifndef NDEBUG
+#if DEBUG == 2
         std::cout << slot << ": length=" << length << ", loop=" << loop << std::endl;
 #endif
 
@@ -642,7 +668,7 @@ rhd2000eval::set_port_auxcommand(port_id port, auxcmd_slot slot, ulong bank)
         }
         okFrontPanel_SetWireInValue(_dev, wire, bank << shift, 0x000f << shift);
         okFrontPanel_UpdateWireIns(_dev);
-#ifndef NDEBUG
+#if DEBUG == 2
         std::cout << "command sequence " << slot << ":" << bank << " -> " << port << std::endl;
 #endif
 }

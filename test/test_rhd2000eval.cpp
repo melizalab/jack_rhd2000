@@ -18,6 +18,9 @@ main(int, char**)
         char * buffer;
         float * values;  // [nchan][period_size]
         dev.reset(new rhd2000eval(sampling_rate));
+        dev->configure_port(rhd2000eval::PortA, 100, 3000, 1, 0x0000ffff);
+        dev->scan_amplifiers();
+
         cout << *dev << endl;
 
         // stream some data and convert it to floats

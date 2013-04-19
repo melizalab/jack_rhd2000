@@ -279,10 +279,16 @@ void
 rhd2000::set_amp_power(size_t channel, bool powered)
 {
         assert(channel <= max_amps);
-        size_t reg = (channel / 8) + AMP_REGISTER;
-        data_type mask = 1 << (channel % 8);
-        if (powered) _registers[reg] |= mask;
-        else _registers[reg] &= ~mask;
+        uint32_t w = *reinterpret_cast<uint32_t *>(_registers+AMP_REGISTER);
+        uint32_t m = 1 << channel;
+        w ^= (w & ~m) | (-powered & m);
+        set_amp_power(w);
+}
+
+void
+rhd2000::set_amp_power(unsigned long mask)
+{
+        *reinterpret_cast<uint32_t *>(_registers+AMP_REGISTER) = mask;
 }
 
 std::bitset<rhd2000::max_amps>
@@ -403,7 +409,7 @@ rhd2000::update(void const * data, size_t offset, size_t stride)
 
 
 void
-rhd2000::command_regset(std::vector<short> &out, bool do_calibrate)
+rhd2000::command_regset(std::vector<short> &out, bool do_calibrate) const
 {
         size_t reg;
         size_t c = 0;
@@ -451,7 +457,7 @@ rhd2000::command_regset(std::vector<short> &out, bool do_calibrate)
 }
 
 void
-rhd2000::command_auxsample(std::vector<short> &out)
+rhd2000::command_auxsample(std::vector<short> &out) const
 {
         const size_t reg = 3;
         size_t i;
