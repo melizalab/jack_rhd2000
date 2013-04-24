@@ -1,0 +1,42 @@
+import os
+Import('env')
+
+if hasattr(os,'uname'):
+    system = os.uname()[0]
+else:
+    system = 'Windows'
+
+# user needs to specify the location of the jack sources
+AddOption('--jack',
+          dest='jack',
+          type='string',
+          nargs=1,
+          action='store',
+          metavar='DIR',
+          default='#jack1',
+          help='JACK 1 source directory')
+
+# need to figure this out for different os
+jack_base = GetOption('jack')
+jack_include_dirs = [os.path.join(jack_base, f) for f in ("","include","config")]
+
+
+menv = env.Clone()
+menv.Append(
+    CXXFLAGS=["-DSERVER_SIDE"],
+    CPPPATH=['#lib'] + jack_include_dirs,
+    LIBS=['m','stdc++','jackserver'],
+)
+menv.Replace(SHLIBSUFFIX=".so",
+             SHLIBPREFIX="")
+
+if system == 'Darwin':
+    # force bundle instead of dylib
+    menv.Replace(SHLINKFLAGS=["$LINKFLAGS", "-bundle","-mmacosx-version-min=10.4"])
+
+lib = env.Glob("#lib/*.os")
+srcs = ["jack_rhd2k_driver.cpp"]
+objs = [menv.SharedObject(f) for f in srcs]
+
+so  = menv.SharedLibrary("jack_rhd2000", objs + lib)
+# env.Alias(obj,"driver")

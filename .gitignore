@@ -2,6 +2,7 @@
 *.dylib
 *.[oa]
 *.os
+*.so
+/attic
 /test/test_driver
-/test/test_stream
 /test/test_rhd2k
