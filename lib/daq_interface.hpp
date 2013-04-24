@@ -2,7 +2,6 @@
 #define _DAQ_INTERFACE_H
 
 #include <stdexcept>
-#include <boost/noncopyable.hpp>
 
 typedef unsigned int uint;
 typedef unsigned long ulong;
@@ -16,7 +15,7 @@ struct daq_error : public std::runtime_error {
  * input and output channels. This specifies methods for starting and stopping
  * the acquisition system and querying its capabilities.
  */
-class daq_interface : boost::noncopyable {
+class daq_interface {
 
 public:
 

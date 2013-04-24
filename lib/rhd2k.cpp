@@ -3,7 +3,6 @@
 #include <ostream>
 #include <sstream>
 #include <iomanip>
-#include <boost/utility/binary.hpp>
 #include "daq_interface.hpp"
 #include "rhd2k.hpp"
 
@@ -27,24 +26,24 @@ using std::size_t;
 using namespace rhd2k;
 
 static rhd2000::data_type ram_register_defaults[] =
-{ BOOST_BINARY(11011110),      // 0: mostly fixed values; fast settle [5] off
-  BOOST_BINARY(01000000),      // 1: set ADC buffer bias [5:0] based on sample rate
-  BOOST_BINARY(00000000),      // 2: set mux bias [5:0] based on sample rate
-  BOOST_BINARY(00000010),      // 3: digout HiZ [1] = 1
-  BOOST_BINARY(10000000),      // 4: set DSP enable [4] and cutoff [3:0] in class
-  BOOST_BINARY(00000000),      // 5: impedance check DAC disabled
-  BOOST_BINARY(10000000),      // 6: DAC set to 0
-  BOOST_BINARY(00000000),      // 7: zcheck DAC disconnected
-  BOOST_BINARY(00000000),      // 8: offchip rh1 [7] disabled; set rh1 value [5:0] in class
-  BOOST_BINARY(10000000),      // 9: adc1 enabled [7]; set rh1 value [4:0] in class
-  BOOST_BINARY(00000000),      // 10: offchip rh2 [7] disabled; set rh2 value [5:0] in class
-  BOOST_BINARY(10000000),      // 11: adc2 enabled [7]; set rh2 value [4:0] in class
-  BOOST_BINARY(00000000),      // 12: offchip rl [7] disabled; set rl dac1 [6:0] in class
-  BOOST_BINARY(10000000),      // 13: adc3 enabled [7]; set rl dac3 [6] and dac2 [5:0] in class
-  BOOST_BINARY(11111111),      // 14: amps 0-7 enabled
-  BOOST_BINARY(11111111),      // 15: amps 8-15 enabled
-  BOOST_BINARY(11111111),      // 16: amps 16-23 enabled
-  BOOST_BINARY(11111111)       // 17: amps 23-31 enabled
+{ 0336, // BOOST_BINARY(11011110),      // 0: mostly fixed values; fast settle [5] off
+  0100, // BOOST_BINARY(01000000),      // 1: set ADC buffer bias [5:0] based on sample rate
+  0000, // BOOST_BINARY(00000000),      // 2: set mux bias [5:0] based on sample rate
+  0002, // BOOST_BINARY(00000010),      // 3: digout HiZ [1] = 1
+  0200, // BOOST_BINARY(10000000),      // 4: set DSP enable [4] and cutoff [3:0] in class
+  0000, // BOOST_BINARY(00000000),      // 5: impedance check DAC disabled
+  0200, // BOOST_BINARY(10000000),      // 6: DAC set to 0
+  0000, // BOOST_BINARY(00000000),      // 7: zcheck DAC disconnected
+  0000, // BOOST_BINARY(00000000),      // 8: offchip rh1 [7] disabled; set rh1 value [5:0] in class
+  0200, // BOOST_BINARY(10000000),      // 9: adc1 enabled [7]; set rh1 value [4:0] in class
+  0000, // BOOST_BINARY(00000000),      // 10: offchip rh2 [7] disabled; set rh2 value [5:0] in class
+  0200, // BOOST_BINARY(10000000),      // 11: adc2 enabled [7]; set rh2 value [4:0] in class
+  0000, // BOOST_BINARY(00000000),      // 12: offchip rl [7] disabled; set rl dac1 [6:0] in class
+  0200, // BOOST_BINARY(10000000),      // 13: adc3 enabled [7]; set rl dac3 [6] and dac2 [5:0] in class
+  0377, // BOOST_BINARY(11111111),      // 14: amps 0-7 enabled
+  0377, // BOOST_BINARY(11111111),      // 15: amps 8-15 enabled
+  0377, // BOOST_BINARY(11111111),      // 16: amps 16-23 enabled
+  0377, // BOOST_BINARY(11111111)       // 17: amps 23-31 enabled
 };
 static const size_t ram_register_count = sizeof(ram_register_defaults);
 

@@ -5,7 +5,7 @@
 #include "rhd2k.hpp"
 #include "okFrontPanelDLL.h"
 
-#define MAX_NUM_DATA_STREAMS 8
+#define RHYTHM_BOARD_ID 500L
 #define FIFO_CAPACITY_WORDS 67108864
 static const ulong ulong_mask = 0xffffffff;
 

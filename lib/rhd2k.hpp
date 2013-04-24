@@ -5,7 +5,6 @@
 #include <cassert>
 #include <vector>
 #include <bitset>
-#include <boost/noncopyable.hpp>
 
 namespace rhd2k {
 
@@ -30,7 +29,7 @@ print_command(std::ostream &, short);
 /**
  * Represents a single RHD2000 amplifer.
  */
-class rhd2000 : boost::noncopyable {
+class rhd2000 {
 
 public:
         /** the data type for the rhd2000 registers */

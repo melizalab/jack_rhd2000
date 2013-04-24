@@ -1,12 +1,11 @@
 import os
-Import('env libname')
+Import('env')
 
 menv = env.Clone()
-menv.Append(CPPPATH=['#lib'],
-            LIBPATH=['#lib'],
-            LIBS=[libname])
+menv.Append(CPPPATH=['#lib'])
 
+lib = env.Glob("#lib/*.os")
 src = env.Glob("test*.c") + env.Glob("test*.cpp")
-prg = [menv.Program(os.path.splitext(str(f))[0], f) for f in src]
+prg = [menv.Program(os.path.splitext(str(f))[0], [f] + lib) for f in src]
 env.Alias('test',prg)
 

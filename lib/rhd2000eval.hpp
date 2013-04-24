@@ -1,11 +1,10 @@
 #ifndef _RHD2000EVAL_H
 #define _RHD2000EVAL_H
 
+#include <cassert>
 #include <iosfwd>
-#include <boost/shared_ptr.hpp>
 #include "daq_interface.hpp"
 
-#define RHYTHM_BOARD_ID 500L
 typedef void* okFrontPanel_HANDLE;
 typedef void* okPLL22393_HANDLE;
 
@@ -152,6 +151,10 @@ protected:
         void enable_streams(ulong);
 
 private:
+        /* object is non-copyable */
+        evalboard(evalboard const &);
+        evalboard& operator=(evalboard const &);
+
         void reset_board();
         void set_sampling_rate();
         void set_cable_delay(port_id port, uint delay);

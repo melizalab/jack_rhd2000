@@ -242,7 +242,49 @@ is big-endian.
 
 ** TODO infer cable length
 
-** TODO allow user to disable streams with active amps
+** DONE allow user to disable streams with active amps
 
 ** DONE allow user to set per-amplifier filter and amp power values
+
+** TODO JACK driver parameters
+
+user needs to set
+
+1. sampling rate
+2. period size
+3. device serial (optional)
+4. port configuration (A-D)
+   1. enabled
+   2. channels to use
+   3. filter bandwidth
+   4. dsp cutoff
+   5. cable length
+5. aux adc configuration
+   1. channels to use
+
+unfortunately JACK is fairly restrictive in how parameters are parsed; each
+parameter has to be assigned a character, so I can't do a complex setup like
+-A,c 0xffff to set the channel mask for port A.  Probably the best option is to
+require a complete specification that's parsed, like -A 0 to disable, -A
+0xffff,100,3000,1,3.0 to enable the first sixteen channels, set the bandwidth to
+100-3000, dsp cutoff to 1, and cable length to 3.0.  It's a bit hacky but I
+don't see any other options at the moment.
+
+add to docs how to list usb devices
+
+os x : system_profiler SPUSBDataType
+linux: lsusb
+
+** TODO JACK driver skeleton
+
+writing this jack driver is a bit of a pain. The server code is exported as a shared
+library, but the headers are not, so one either has to link into the jack
+source or else build the driver in the jack source tree.
+
+I'd sort of prefer to write the driver for jack 2, because the rhd code is in
+C++, and the jack server headers have c++ syntax errors.  However, I can't get
+jack 2 to compile for OS X, either with waf or with xcode.
+
+we're unlikely to be using the software on macs, but
+
 
