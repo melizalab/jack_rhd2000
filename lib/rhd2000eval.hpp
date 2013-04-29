@@ -3,7 +3,10 @@
 
 #include <cassert>
 #include <iosfwd>
+#include <map>
+#include <string>
 #include "daq_interface.hpp"
+
 
 typedef void* okFrontPanel_HANDLE;
 typedef void* okPLL22393_HANDLE;
@@ -20,12 +23,14 @@ struct ok_error : public daq_error {
 class evalboard : public daq_interface {
 
 public:
-        // number of output ports (= number of MOSI lines)
-        static const std::size_t nports = 4;
-        // number of inputs (= number of MISO lines)
-        static const std::size_t ninputs = 8;
+        /// how the digitized samples are stored
+        typedef short data_type;
+        /// number of output ports (= number of MOSI lines)
+        static const std::size_t nmosi = 4;
+        /// number of inputs (= number of MISO lines)
+        static const std::size_t nmiso = 8;
 
-        enum port_id {
+        enum mosi_id {
                 PortA = 0,
                 PortB = 1,
                 PortC = 2,
@@ -38,7 +43,7 @@ public:
                 AuxCmd3 = 2
         };
 
-        enum input_id {
+        enum miso_id {
                 PortA1 = 0,
                 PortA2 = 1,
                 PortB1 = 2,
@@ -47,14 +52,6 @@ public:
                 PortC2 = 5,
                 PortD1 = 6,
                 PortD2 = 7,
-                PortA1Ddr = 8,
-                PortA2Ddr = 9,
-                PortB1Ddr = 10,
-                PortB2Ddr = 11,
-                PortC1Ddr = 12,
-                PortC2Ddr = 13,
-                PortD1Ddr = 14,
-                PortD2Ddr = 15
         };
 
         evalboard(std::size_t sampling_rate, char const * serial=0, char const * firmware=0);
@@ -74,20 +71,27 @@ public:
          * @overload daq_interface::read()
          *
          * @note if the RHD2000eval FIFO contains less than the requested number
-         * of samples, the last sample in the buffer will be repeated.
+         * of samples, the last sample in the buffer will be repeated, so it's
+         * important to check whether enough frames are ready
          */
         std::size_t read(void *, std::size_t);
 
-
         /* rhd2k eval specific */
 
+        /**
+         * Generate a table of ADC channels by iterating through the attached
+         * MISO devices. For each element of the table (it), it.first gives
+         * the offset into the frame buffer, and it.second gives a name
+         * comprising the MISO port (or "EV" for the eval board ADCs) and the
+         * channel number.  Only enabled channels are included.
+         */
+        std::map<std::size_t, std::string> adc_table() const;
+
         /** set the cable length in meters for a port */
-        void set_cable_meters(port_id port, double meters);
+        void set_cable_meters(mosi_id port, double meters);
 
         /** set the cable length in feet for a port */
-        void set_cable_feet(port_id port, double feet) {
-                set_cable_meters(port,  0.03048 * feet);
-        }
+        void set_cable_feet(mosi_id port, double feet);
 
         /**
          * Configure the RHD2000 chips on a port. This command will only take
@@ -104,7 +108,7 @@ public:
          *                    amplifiers (e.g. 0x0000ffff will turn on the
          *                    16 channels and turn off the last 16.
          */
-        void configure_port(port_id port, double lower, double upper,
+        void configure_port(mosi_id port, double lower, double upper,
                             double dsp, ulong amp_power=0xffffffff);
 
         /**
@@ -116,11 +120,14 @@ public:
         void scan_ports();
 
         /** the number of streams that have been enabled */
-        std::size_t streams_enabled() const ;
+        std::size_t streams_enabled() const;
         /** true if a stream is enabled */
         bool stream_enabled(std::size_t stream) const;
         /** enable or disable a stream for data collection */
         void enable_stream(std::size_t stream, bool enabled);
+
+        /** access an rhd2000 chip by index */
+        rhd2000 const * miso(miso_id) const;
 
         void set_leds(ulong value, ulong mask=0xffffffff);
         void ttl_out(ulong value, ulong mask=0xffffffff);
@@ -142,7 +149,7 @@ protected:
                 set_auxcommand_length(slot, idx);
         }
         void set_auxcommand_length(auxcmd_slot slot, ulong length, ulong loop=0);
-        void set_port_auxcommand(port_id port, auxcmd_slot slot, ulong bank);
+        void set_port_auxcommand(mosi_id port, auxcmd_slot slot, ulong bank);
 
         bool dcm_done() const;
         bool clock_locked() const;
@@ -157,13 +164,13 @@ private:
 
         void reset_board();
         void set_sampling_rate();
-        void set_cable_delay(port_id port, uint delay);
+        void set_cable_delay(mosi_id port, uint delay);
 
         okFrontPanel_HANDLE _dev;
         okPLL22393_HANDLE _pll;
-        rhd2k::rhd2000 * _ports[nports];
-        rhd2k::rhd2000 * _amplifiers[ninputs];
-        double _cable_lengths[nports];
+        rhd2000 * _mosi[nmosi];
+        rhd2000 * _miso[nmiso];
+        double _cable_lengths[nmosi];
 
         uint _sampling_rate;
         ulong _board_version;
@@ -172,8 +179,8 @@ private:
 };
 
 std::ostream & operator<< (std::ostream &, evalboard::auxcmd_slot);
-std::ostream & operator<< (std::ostream &, evalboard::port_id);
-std::ostream & operator<< (std::ostream &, evalboard::input_id);
+std::ostream & operator<< (std::ostream &, evalboard::mosi_id);
+std::ostream & operator<< (std::ostream &, evalboard::miso_id);
 
 
 } // namespace

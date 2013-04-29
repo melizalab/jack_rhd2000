@@ -1,10 +1,10 @@
 #ifndef _RHD2K_H
 #define _RHD2K_H
 
+#include <stdint.h>
 #include <iosfwd>
 #include <cassert>
 #include <vector>
-#include <bitset>
 
 namespace rhd2k {
 
@@ -40,6 +40,8 @@ public:
         static const std::size_t max_amps = 32;
         /** the number of commands in the register programming sequence */
         static const std::size_t register_sequence_length = 60;
+        /** the data type for the amp power mask */
+        typedef uint32_t power_mask_type;
 
         explicit rhd2000(std::size_t sampling_rate);
         ~rhd2000() {}
@@ -57,8 +59,9 @@ public:
         void set_dsp_cutoff(double);
 
         void set_amp_power(std::size_t channel, bool powered);
-        void set_amp_power(unsigned long mask);
-        std::bitset<max_amps> amp_power() const;
+        void set_amp_power(power_mask_type mask);
+        bool amp_power(std::size_t chan) const;
+        power_mask_type amp_power() const;
         std::size_t amps_powered() const;
 
         /**

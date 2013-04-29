@@ -5,8 +5,11 @@
 #include <stdlib.h>
 #include <string>
 #include <iostream>
+#include <sstream>
+#include <list>
 
 #include "rhd2000eval.hpp"
+#include "rhd2k.hpp"
 
 #include <jack/types.h>
 #include <jack/jslist.h>
@@ -25,11 +28,12 @@ struct rhd2k_driver_t {
         JACK_DRIVER_NT_DECL;
 
         evalboard * dev;
+        void * buffer;
 
 	jack_nframes_t  period_size;
 
 	jack_client_t  * client;
-        JSList * playback_ports;
+        std::list<jack_port_t*> capture_ports;
 };
 
 struct rhd2k_amp_settings_t {
@@ -37,7 +41,7 @@ struct rhd2k_amp_settings_t {
         double lowpass;
         double highpass;
         double dsp;
-        double cable_ft;
+        double cable_m;
 };
 
 struct rhd2k_jack_settings_t {
@@ -46,14 +50,14 @@ struct rhd2k_jack_settings_t {
 
         jack_nframes_t capture_frame_latency;
 
-        rhd2k_amp_settings_t amplifiers[evalboard::nports];
+        rhd2k_amp_settings_t amplifiers[evalboard::nmosi];
         long eval_adc_enabled;
 
 };
 
 static char const * default_firmware = "rhythm_130302.bit";
 
-static const rhd2k_amp_settings_t default_amp_config = {0xffffffff, 100, 3000, 1, 3};
+static const rhd2k_amp_settings_t default_amp_config = {0xffffffff, 100, 3000, 1, 0.914};
 static const rhd2k_jack_settings_t default_settings = {1024U, 30000U, 0U,
                                                        {default_amp_config,
                                                         default_amp_config,
@@ -61,13 +65,13 @@ static const rhd2k_jack_settings_t default_settings = {1024U, 30000U, 0U,
                                                         default_amp_config},
                                                        0};
 
-extern const char driver_client_name[] = "rhd2000_pcm";
+extern const char driver_client_name[] = "rhd2000";
 
 static void
 parse_port_config(char pchar, char const * arg, rhd2k_jack_settings_t & s)
 {
         rhd2k_amp_settings_t * pptr;
-        evalboard::port_id port;
+        evalboard::mosi_id port;
 
         switch(pchar) {
         case 'A':
@@ -88,16 +92,71 @@ parse_port_config(char pchar, char const * arg, rhd2k_jack_settings_t & s)
         pptr = &s.amplifiers[(size_t)port];
         // should really do some more validation
         sscanf(arg, "%li,%lf,%lf,%lf,%lf", &pptr->amp_power, &pptr->lowpass,
-                       &pptr->highpass, &pptr->dsp, &pptr->cable_ft);
+               &pptr->highpass, &pptr->dsp, &pptr->cable_m);
 }
 
 static int
 rhd2k_driver_attach (rhd2k_driver_t *driver)
-{}
+{
+	jack_port_t *port = 0;
+        // inform the engine of sample rate and buffer size
+	if (driver->engine->set_buffer_size (driver->engine, driver->period_size)) {
+		jack_error ("RHD2K: cannot set engine buffer size to %d", driver->period_size);
+		return -1;
+	}
+        driver->engine->set_sample_rate (driver->engine, driver->dev->sampling_rate());
+
+        // allocate scratch buffer
+        driver->buffer = malloc(driver->dev->frame_size() * driver->period_size);
+        if (driver->buffer == 0) {
+                jack_error ("RHD2K: unable to allocate buffer");
+                return -1;
+        }
+
+        // create ports
+	const int port_flags = JackPortIsOutput|JackPortIsPhysical|JackPortIsTerminal;
+        std::map<std::size_t, std::string> channels = driver->dev->adc_table();
+        std::map<std::size_t, std::string>::const_iterator it;
+        for (it = channels.begin(); it != channels.end(); ++it) {
+#ifndef NDEBUG
+                jack_info("Registering capture port %s (offset = %zd)", it->second.c_str(), it->first);
+#endif
+                if ((port = jack_port_register (driver->client, it->second.c_str(),
+                                                JACK_DEFAULT_AUDIO_TYPE,
+                                                port_flags, 0)) == NULL) {
+                        jack_error ("RHD2K: cannot register port for %s", it->second.c_str());
+                        break;
+                }
+                driver->capture_ports.push_back(port);
+        }
+
+        // flush input buffers?
+
+	return jack_activate (driver->client);
+
+}
 
 static int
 rhd2k_driver_detach (rhd2k_driver_t *driver)
-{}
+{
+	if (driver->engine == NULL) {
+		return 0;
+	}
+
+        std::list<jack_port_t*>::const_iterator it;
+	for (it = driver->capture_ports.begin(); it != driver->capture_ports.end(); ++it) {
+#ifndef NDEBUG
+                jack_info("Unregistering capture port %s", jack_port_name(*it));
+#endif
+                jack_port_unregister (driver->client, *it);
+	}
+        driver->capture_ports.clear();
+
+        // release scratch buffer
+        free(driver->buffer);
+
+        return 0;
+}
 
 static int
 rhd2k_driver_read (rhd2k_driver_t * driver, jack_nframes_t nframes)
@@ -148,18 +207,30 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
 
 	driver->client = client;
 	driver->engine = NULL;
-
 	driver->period_size = settings.period_size;
+	driver->last_wait_ust = 0;
 
         try {
                 driver->dev = new evalboard(settings.sample_rate, serial, firmware);
                 // configure ports
-                for (std::size_t i = 0; i < evalboard::nports; ++i) {
+                for (std::size_t i = 0; i < evalboard::nmosi; ++i) {
                         rhd2k_amp_settings_t * a = &settings.amplifiers[i];
-                        driver->dev->configure_port((evalboard::port_id)i, a->lowpass, a->highpass, a->dsp, a->amp_power);
+                        driver->dev->set_cable_meters((evalboard::mosi_id)i, a->cable_m);
+                        driver->dev->configure_port((evalboard::mosi_id)i, a->lowpass, a->highpass, a->dsp, a->amp_power);
                 }
                 // scan ports
                 driver->dev->scan_ports();
+                // disable streams where the user sets power off to all amps -
+                // note that it's not possible to only enable one MISO line on a
+                // port (a rare unsupported use case)
+                for (std::size_t i = 0; i < evalboard::nmosi; ++i) {
+                        rhd2k_amp_settings_t * a = &settings.amplifiers[i];
+                        if (a->amp_power == 0x0) {
+                                driver->dev->enable_stream(i*2, false);
+                                driver->dev->enable_stream(i*2+1, false);
+                        }
+                }
+
                 driver->period_usecs =
                         (jack_time_t) floor ((((float) driver->period_size) * 1000000.0f) / driver->dev->sampling_rate());
 
@@ -196,7 +267,7 @@ driver_get_descriptor ()
 
 	desc = (jack_driver_desc_t *) calloc (1, sizeof (jack_driver_desc_t));
 	strcpy (desc->name, "rhd2000");
-	desc->nparams = 6 + evalboard::nports;
+	desc->nparams = 6 + evalboard::nmosi;
 	desc->params = (jack_driver_param_desc_t *) calloc (desc->nparams,
                                                                     sizeof (jack_driver_param_desc_t));
         param = desc->params;
@@ -230,22 +301,15 @@ driver_get_descriptor ()
         strcpy(param->short_desc, "frames per period");
         strcpy(param->long_desc, param->short_desc);
 
-        param++;
-        strcpy(param->name, "port-A");
-        param->character = 'A';
-        param->type = JackDriverParamString;
-	strcpy(param->value.str,  "0xffffffff,100,3000,1,3.0");
-        strcpy(param->short_desc, "configure port A");
-        strcpy(param->long_desc, "configure port A: channels[,lopass[,hipass[,dsp-hipass[,cable-length]]]]");
-
-        for (std::size_t p = 1; p < evalboard::nports; ++p) {
+        for (std::size_t p = 0; p < evalboard::nmosi; ++p) {
                 param++;
                 param->character = 'A' + p;
                 sprintf(param->name, "port-%c", param->character);
-                strcpy(param->value.str, "0");
+                param->type = JackDriverParamString;
+                strcpy(param->value.str,  "0xffffffff,100,3000,1,0.914");
                 sprintf(param->short_desc, "configure port %c", param->character);
                 sprintf(param->long_desc,
-                        "configure port %c: channels[,lopass[,hipass[,dsp-hipass[,cable-length]]]]",
+                        "configure port %c: channels[,lopass[,hipass[,dsp-hipass[,cable-meters]]]]",
                         param->character);
         }
 

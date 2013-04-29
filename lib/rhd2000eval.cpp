@@ -1,10 +1,13 @@
 #include <cstdio>
 #include <math.h>
 #include <iostream>
+#include <sstream>
+#include <bitset>
 #include "rhd2000eval.hpp"
 #include "rhd2k.hpp"
 #include "okFrontPanelDLL.h"
 
+#define FEET_PER_METERS 0.3048
 #define RHYTHM_BOARD_ID 500L
 #define FIFO_CAPACITY_WORDS 67108864
 static const ulong ulong_mask = 0xffffffff;
@@ -109,9 +112,9 @@ evalboard::evalboard(size_t sampling_rate, char const * serial, char const * fir
 {
         // allocate storage for the amplifier wrappers. the first amplifier does
         // double duty for setting output
-        for (size_t i = 0; i < ninputs; ++i) {
-                _amplifiers[i] = new rhd2000(_sampling_rate);
-                if (i % 2 == 0) _ports[i/2] = _amplifiers[i];
+        for (size_t i = 0; i < nmiso; ++i) {
+                _miso[i] = new rhd2000(_sampling_rate);
+                if (i % 2 == 0) _mosi[i/2] = _miso[i];
         }
 
         ulong board_id;
@@ -159,8 +162,8 @@ evalboard::evalboard(size_t sampling_rate, char const * serial, char const * fir
 
 evalboard::~evalboard()
 {
-        for (size_t i = 0; i < ninputs; ++i) {
-                delete _amplifiers[i];
+        for (size_t i = 0; i < nmiso; ++i) {
+                delete _miso[i];
         }
         if (_pll) okPLL22393_Destruct(_pll);
         if (_dev) okFrontPanel_Destruct(_dev);
@@ -227,7 +230,7 @@ evalboard::enable_streams(ulong arg)
 {
         assert (arg <= 0x00ff);
         _enabled_streams = arg;
-        _nactive_streams = std::bitset<ninputs>(arg).count();
+        _nactive_streams = std::bitset<nmiso>(arg).count();
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamEn, _enabled_streams, ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
 }
@@ -268,9 +271,9 @@ evalboard::adc_channels() const
 {
         // this depends on the number of streams and amps per stream
         size_t ret = 8;         // the eval board ADCs
-        for (size_t i = 0; i < ninputs; ++i) {
+        for (size_t i = 0; i < nmiso; ++i) {
                 if (stream_enabled(i)) {
-                        ret += _amplifiers[i]->amps_powered();
+                        ret += _miso[i]->amps_powered();
                 }
         }
         return ret;
@@ -325,7 +328,7 @@ evalboard::reset_board()
         okFrontPanel_UpdateWireIns(_dev);
 
         // set the basic command sequences for all ports
-        rhd2000 * amp = _ports[0];
+        rhd2000 * amp = _mosi[0];
         std::vector<short> commands;
         // slot 1: write 0's to dac
         std::vector<double> dac(60,0.0);
@@ -340,8 +343,8 @@ evalboard::reset_board()
 
         // assign command sequences to ports with some shady enum casting
         for (int port = (int)PortA; port <= (int)PortD; ++port) {
-                set_port_auxcommand((port_id)port, AuxCmd1, 0);
-                set_port_auxcommand((port_id)port, AuxCmd2, 0);
+                set_port_auxcommand((mosi_id)port, AuxCmd1, 0);
+                set_port_auxcommand((mosi_id)port, AuxCmd2, 0);
         }
 
 }
@@ -421,13 +424,13 @@ evalboard::set_sampling_rate()
 
         // set delay - which depends on sampling rate
         for (size_t port = (size_t)PortA; port <= (size_t)PortD; ++port) {
-                set_cable_feet((port_id)port, 3.0);
+                set_cable_feet((mosi_id)port, 3.0);
         }
 
 }
 
 void
-evalboard::set_cable_delay(port_id port, uint delay)
+evalboard::set_cable_delay(mosi_id port, uint delay)
 {
         assert (delay < 16);
         int shift = (int)port * 4;
@@ -439,7 +442,13 @@ evalboard::set_cable_delay(port_id port, uint delay)
 }
 
 void
-evalboard::set_cable_meters(port_id port, double len)
+evalboard::set_cable_feet(mosi_id port, double feet)
+{
+        set_cable_meters(port,  FEET_PER_METERS * feet);
+}
+
+void
+evalboard::set_cable_meters(mosi_id port, double len)
 {
         assert (len > 0);
         uint delay;
@@ -469,13 +478,13 @@ evalboard::set_cable_meters(port_id port, double len)
 }
 
 void
-evalboard::configure_port(port_id port, double lower, double upper,
+evalboard::configure_port(mosi_id port, double lower, double upper,
                            double dsp, ulong amp_power)
 {
         if (running()) {
                 throw daq_error("can't configure port while system is running");
         }
-        rhd2000 * amp = _ports[(size_t)port];
+        rhd2000 * amp = _mosi[(size_t)port];
         amp->set_lower_bandwidth(lower);
         amp->set_upper_bandwidth(upper);
         amp->set_dsp_cutoff(dsp);
@@ -502,10 +511,10 @@ evalboard::scan_ports()
 
         // upload calibration sequences to slot 3 - diff bank for each port
         for (size_t i = (size_t)PortA; i <= (size_t)PortD; ++i) {
-                port = _ports[i];
+                port = _mosi[i];
                 port->command_regset(commands, true);
                 upload_auxcommand(AuxCmd3, i, commands.begin(), commands.end());
-                set_port_auxcommand((port_id)i, AuxCmd3, i);
+                set_port_auxcommand((mosi_id)i, AuxCmd3, i);
         }
 
         // enable all data streams
@@ -532,12 +541,12 @@ evalboard::scan_ports()
         }
 
         // inspect a frame in gdb: p/x *(short*)(buffer+12)@(_nactive_streams*36)
-        for (size_t stream = 0; stream < ninputs; ++stream) {
-                size_t offset = 2 * (6 + 2 * ninputs + stream);
+        for (size_t stream = 0; stream < nmiso; ++stream) {
+                size_t offset = 2 * (6 + 2 * nmiso + stream);
 #if DEBUG == 2
                 print_channel<short>(buffer, nframes, offset, frame_bytes);
 #endif
-                port = _amplifiers[stream]; // pointer does double duty for amps
+                port = _miso[stream]; // pointer does double duty for amps
                 port->update(buffer, offset, frame_bytes);
                 enable_stream(stream, port->connected());
         }
@@ -548,7 +557,7 @@ evalboard::scan_ports()
 
         // turn off calibration sequence
         for (size_t i = (size_t)PortA; i <= (size_t)PortD; ++i) {
-                port = _ports[i];
+                port = _mosi[i];
                 port->command_regset(commands, false);
                 upload_auxcommand(AuxCmd3, i, commands.begin(), commands.end());
         }
@@ -600,7 +609,7 @@ evalboard::set_auxcommand_length(auxcmd_slot slot, ulong length, ulong loop)
 
 
 void
-evalboard::set_port_auxcommand(port_id port, auxcmd_slot slot, ulong bank)
+evalboard::set_port_auxcommand(mosi_id port, auxcmd_slot slot, ulong bank)
 {
         int shift, wire;
         assert (bank < 16);
@@ -679,6 +688,36 @@ evalboard::ttl_in() const
         return okFrontPanel_GetWireOutValue(_dev, WireOutTtlIn);
 }
 
+rhd2k::rhd2000 const *
+evalboard::miso(miso_id m) const
+{
+        assert ((size_t)m < nmiso);
+        return _miso[(size_t)m];
+}
+
+std::map<size_t, std::string>
+evalboard::adc_table() const
+{
+        const size_t base_offset = 12; // first twelve bytes in frame
+        std::map<size_t, std::string> ret;
+        size_t active_stream = 0;
+        size_t offset;
+        for (size_t i = 0; i < evalboard::nmiso; ++i) {
+                if (!stream_enabled(i)) continue;
+                rhd2000 const * chip = _miso[i];
+                for (size_t c = 0; c < rhd2000::max_amps; ++c) {
+                        if (chip->amp_power(c)) {
+                                std::ostringstream name;
+                                name << (miso_id)i << '_' << c;
+                                // byte offset: base + chan * nstreams + stream
+                                offset = base_offset + sizeof(data_type) * (c * streams_enabled() + active_stream);
+                                ret[offset] = name.str();
+                        }
+                }
+                active_stream += 1;
+        }
+        return ret;
+}
 
 namespace rhd2k {
 
@@ -702,12 +741,12 @@ operator<< (std::ostream & o, evalboard const & r)
           << "\n FIFO data: " << r.words_in_fifo() << '/' << FIFO_CAPACITY_WORDS << " words ("
           << (100.0 * r.words_in_fifo() / FIFO_CAPACITY_WORDS) << "% full)"
           << "\n Analog inputs enabled: " << r.adc_channels()
-          << "\n Headstages: ";
-        for (size_t i = 0; i < r.ninputs; ++i) {
+          << "\n MISO lines: ";
+        for (size_t i = 0; i < r.nmiso; ++i) {
                 // this assumes the mapping established in reset_board
-                o << "\n" << (evalboard::input_id)i << ": "
-                  <<  *(r._amplifiers[i]);
-                if (!r.stream_enabled(i)) o << "(off) ";
+                o << "\n" << (evalboard::miso_id)i << ": "
+                  <<  *(r._miso[i]);
+                if (!r.stream_enabled(i)) o << " (off) ";
                 else {
                         sprintf(buf1, " (cable %.3f m)", r._cable_lengths[i/2]);
                         o << buf1;
@@ -731,7 +770,7 @@ operator<< (std::ostream & o, evalboard::auxcmd_slot slot) {
 }
 
 std::ostream &
-operator<< (std::ostream & o, evalboard::port_id port) {
+operator<< (std::ostream & o, evalboard::mosi_id port) {
         switch(port) {
         case evalboard::PortA:
                 return o << "A";
@@ -747,7 +786,7 @@ operator<< (std::ostream & o, evalboard::port_id port) {
 }
 
 std::ostream &
-operator<< (std::ostream & o, evalboard::input_id source) {
+operator<< (std::ostream & o, evalboard::miso_id source) {
         switch(source) {
         case evalboard::PortA1:
                 return o << "A1";

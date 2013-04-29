@@ -3,6 +3,7 @@
 #include <ostream>
 #include <sstream>
 #include <iomanip>
+#include <bitset>
 #include "daq_interface.hpp"
 #include "rhd2k.hpp"
 
@@ -285,22 +286,28 @@ rhd2000::set_amp_power(size_t channel, bool powered)
 }
 
 void
-rhd2000::set_amp_power(unsigned long mask)
+rhd2000::set_amp_power(power_mask_type mask)
 {
-        *reinterpret_cast<uint32_t *>(_registers+AMP_REGISTER) = mask;
+        *reinterpret_cast<power_mask_type *>(_registers+AMP_REGISTER) = mask;
 }
 
-std::bitset<rhd2000::max_amps>
+rhd2000::power_mask_type
 rhd2000::amp_power() const
 {
         // TODO: read more than 32 bits if number of amps increases
-        return std::bitset<max_amps>(*reinterpret_cast<uint32_t const *>(_registers+AMP_REGISTER));
+        return *reinterpret_cast<power_mask_type const *>(_registers+AMP_REGISTER);
+}
+
+bool
+rhd2000::amp_power(size_t channel) const
+{
+        return amp_power() & (1 << channel);
 }
 
 size_t
 rhd2000::amps_powered() const
 {
-        return amp_power().count();
+        return std::bitset<max_amps>(amp_power()).count();
 }
 
 bool
