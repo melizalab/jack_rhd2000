@@ -60,9 +60,6 @@ public:
         /** the number of bytes per frame */
         virtual std::size_t frame_size() const = 0;
 
-        /** the byte offset of an analog input channel's data in a frame */
-        virtual std::size_t adc_offset(std::size_t channel) const = 0;
-
         /** the number of active analog input channels */
         virtual std::size_t adc_channels() { return 0; }
 

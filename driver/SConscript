@@ -39,4 +39,4 @@ srcs = ["jack_rhd2k_driver.cpp"]
 objs = [menv.SharedObject(f) for f in srcs]
 
 so  = menv.SharedLibrary("jack_rhd2000", objs + lib)
-# env.Alias(obj,"driver")
+menv.Alias("driver", so)

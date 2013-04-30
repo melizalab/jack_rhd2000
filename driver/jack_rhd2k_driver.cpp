@@ -22,6 +22,8 @@ extern "C"
 #include "engine.h"
 }
 
+using std::size_t;
+using std::string;
 using namespace rhd2k;
 
 struct rhd2k_driver_t {
@@ -31,6 +33,7 @@ struct rhd2k_driver_t {
         void * buffer;
 
 	jack_nframes_t  period_size;
+        long eval_adc_enabled;
 
 	jack_client_t  * client;
         std::list<jack_port_t*> capture_ports;
@@ -51,7 +54,7 @@ struct rhd2k_jack_settings_t {
         jack_nframes_t capture_frame_latency;
 
         rhd2k_amp_settings_t amplifiers[evalboard::nmosi];
-        long eval_adc_enabled;
+        long eval_adc_enabled;  // 8 bit mask
 
 };
 
@@ -115,16 +118,20 @@ rhd2k_driver_attach (rhd2k_driver_t *driver)
 
         // create ports
 	const int port_flags = JackPortIsOutput|JackPortIsPhysical|JackPortIsTerminal;
-        std::map<std::size_t, std::string> channels = driver->dev->adc_table();
-        std::map<std::size_t, std::string>::const_iterator it;
+        std::map<size_t, string> channels = driver->dev->adc_table();
+        std::map<size_t, string>::const_iterator it;
         for (it = channels.begin(); it != channels.end(); ++it) {
+                char const * name = it->second.c_str();
+                size_t idx;
+                // filter eval board ADC channels
+                if ((sscanf(name,"EV_%zd", &idx) > 0 && !(driver->eval_adc_enabled & 1 << idx))) continue;
 #ifndef NDEBUG
-                jack_info("Registering capture port %s (offset = %zd)", it->second.c_str(), it->first);
+                jack_info("Registering capture port %s (offset = %zd)", name, it->first);
 #endif
-                if ((port = jack_port_register (driver->client, it->second.c_str(),
+                            if ((port = jack_port_register (driver->client, name,
                                                 JACK_DEFAULT_AUDIO_TYPE,
                                                 port_flags, 0)) == NULL) {
-                        jack_error ("RHD2K: cannot register port for %s", it->second.c_str());
+                                    jack_error ("RHD2K: cannot register port for %s", name);
                         break;
                 }
                 driver->capture_ports.push_back(port);
@@ -208,12 +215,13 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
 	driver->client = client;
 	driver->engine = NULL;
 	driver->period_size = settings.period_size;
+        driver->eval_adc_enabled = settings.eval_adc_enabled;
 	driver->last_wait_ust = 0;
 
         try {
                 driver->dev = new evalboard(settings.sample_rate, serial, firmware);
                 // configure ports
-                for (std::size_t i = 0; i < evalboard::nmosi; ++i) {
+                for (size_t i = 0; i < evalboard::nmosi; ++i) {
                         rhd2k_amp_settings_t * a = &settings.amplifiers[i];
                         driver->dev->set_cable_meters((evalboard::mosi_id)i, a->cable_m);
                         driver->dev->configure_port((evalboard::mosi_id)i, a->lowpass, a->highpass, a->dsp, a->amp_power);
@@ -223,7 +231,7 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
                 // disable streams where the user sets power off to all amps -
                 // note that it's not possible to only enable one MISO line on a
                 // port (a rare unsupported use case)
-                for (std::size_t i = 0; i < evalboard::nmosi; ++i) {
+                for (size_t i = 0; i < evalboard::nmosi; ++i) {
                         rhd2k_amp_settings_t * a = &settings.amplifiers[i];
                         if (a->amp_power == 0x0) {
                                 driver->dev->enable_stream(i*2, false);
@@ -301,7 +309,7 @@ driver_get_descriptor ()
         strcpy(param->short_desc, "frames per period");
         strcpy(param->long_desc, param->short_desc);
 
-        for (std::size_t p = 0; p < evalboard::nmosi; ++p) {
+        for (size_t p = 0; p < evalboard::nmosi; ++p) {
                 param++;
                 param->character = 'A' + p;
                 sprintf(param->name, "port-%c", param->character);
@@ -316,8 +324,8 @@ driver_get_descriptor ()
         param++;
         strcpy(param->name, "port-eval");
         param->character = 'X';
-        param->type = JackDriverParamUInt;
-	param->value.ui =  default_settings.eval_adc_enabled;
+        param->type = JackDriverParamString;
+	sprintf(param->value.str,"%lx", default_settings.eval_adc_enabled);
         strcpy(param->short_desc, "configure eval board ADC");
         strcpy(param->long_desc, "configure eval board ADC: channels (8-bit mask)");
 
@@ -362,7 +370,7 @@ driver_initialize(jack_client_t * client, JSList * params)
                         cmlparams.period_size = param->value.ui;
                         break;
                 case 'X':
-                        cmlparams.eval_adc_enabled = param->value.ui;
+                        sscanf(param->value.str, "%li", &cmlparams.eval_adc_enabled);
                         break;
                 case 'I':
                         cmlparams.capture_frame_latency = param->value.ui;

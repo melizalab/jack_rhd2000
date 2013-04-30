@@ -7,13 +7,15 @@
 #include "rhd2k.hpp"
 #include "okFrontPanelDLL.h"
 
-#define FEET_PER_METERS 0.3048
-#define RHYTHM_BOARD_ID 500L
-#define FIFO_CAPACITY_WORDS 67108864
-static const ulong ulong_mask = 0xffffffff;
-
 using std::size_t;
+using std::string;
 using namespace rhd2k;
+
+static const float FEET_PER_METERS = 0.3048;
+static const ulong RHYTHM_BOARD_ID = 500L;
+static const size_t FIFO_CAPACITY_WORDS = 67108864;
+static const ulong ulong_mask = 0xffffffff;
+static const size_t EVAL_NADCS = 8; // number of adcs on the eval board
 
 enum RhythmEndPoints {
         WireInResetRun = 0x00,
@@ -269,20 +271,40 @@ evalboard::read(void * arg, size_t nframes)
 size_t
 evalboard::adc_channels() const
 {
-        // this depends on the number of streams and amps per stream
-        size_t ret = 8;         // the eval board ADCs
-        for (size_t i = 0; i < nmiso; ++i) {
-                if (stream_enabled(i)) {
-                        ret += _miso[i]->amps_powered();
-                }
-        }
-        return ret;
+        return adc_table().size();
 }
 
-size_t
-evalboard::adc_offset(size_t chan) const
+std::map<size_t, string>
+evalboard::adc_table() const
 {
-        return 12;
+        const size_t base_offset = 6; // first words in frame
+        std::map<size_t, string> ret;
+        size_t active_stream = 0;
+        size_t offset;
+        // miso lines
+        for (size_t i = 0; i < evalboard::nmiso; ++i) {
+                if (!stream_enabled(i)) continue;
+                rhd2000 const * chip = _miso[i];
+                for (size_t c = 0; c < rhd2000::max_amps; ++c) {
+                        if (chip->amp_power(c)) {
+                                std::ostringstream name;
+                                name << (miso_id)i << '_' << c;
+                                // byte offset: base + chan * nstreams + stream
+                                offset = sizeof(data_type) * (base_offset + (c * streams_enabled() + active_stream));
+                                ret[offset] = name.str();
+                        }
+                }
+                active_stream += 1;
+        }
+        // eval board adcs
+        for (size_t i = 0; i < EVAL_NADCS; ++i) {
+                std::ostringstream name;
+                name << "EV_" << i;
+                offset = sizeof(data_type) * (base_offset + (36 * streams_enabled()) + i);
+                ret[offset] = name.str();
+        }
+
+        return ret;
 }
 
 void
@@ -688,36 +710,12 @@ evalboard::ttl_in() const
         return okFrontPanel_GetWireOutValue(_dev, WireOutTtlIn);
 }
 
-rhd2k::rhd2000 const *
-evalboard::miso(miso_id m) const
-{
-        assert ((size_t)m < nmiso);
-        return _miso[(size_t)m];
-}
-
-std::map<size_t, std::string>
-evalboard::adc_table() const
-{
-        const size_t base_offset = 12; // first twelve bytes in frame
-        std::map<size_t, std::string> ret;
-        size_t active_stream = 0;
-        size_t offset;
-        for (size_t i = 0; i < evalboard::nmiso; ++i) {
-                if (!stream_enabled(i)) continue;
-                rhd2000 const * chip = _miso[i];
-                for (size_t c = 0; c < rhd2000::max_amps; ++c) {
-                        if (chip->amp_power(c)) {
-                                std::ostringstream name;
-                                name << (miso_id)i << '_' << c;
-                                // byte offset: base + chan * nstreams + stream
-                                offset = base_offset + sizeof(data_type) * (c * streams_enabled() + active_stream);
-                                ret[offset] = name.str();
-                        }
-                }
-                active_stream += 1;
-        }
-        return ret;
-}
+// rhd2k::rhd2000 const *
+// evalboard::miso(miso_id m) const
+// {
+//         assert ((size_t)m < nmiso);
+//         return _miso[(size_t)m];
+// }
 
 namespace rhd2k {
 

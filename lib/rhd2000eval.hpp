@@ -65,9 +65,16 @@ public:
         std::size_t frame_size() const;
         std::size_t sampling_rate() const { return _sampling_rate; }
         std::size_t adc_channels() const;
-        std::size_t adc_offset(std::size_t) const;
 
-        /*
+        /**
+         * Returns a table of ADC channels. For each element of the table (it),
+         * it.first is a name comprising the MISO port (or "EV" for the eval
+         * board ADCs) and the channel number, and it.second gives the offset
+         * into the frame buffer. Only enabled channels are included.
+         */
+        std::map<std::size_t, std::string> adc_table() const;
+
+        /**
          * @overload daq_interface::read()
          *
          * @note if the RHD2000eval FIFO contains less than the requested number
@@ -76,16 +83,7 @@ public:
          */
         std::size_t read(void *, std::size_t);
 
-        /* rhd2k eval specific */
-
-        /**
-         * Generate a table of ADC channels by iterating through the attached
-         * MISO devices. For each element of the table (it), it.first gives
-         * the offset into the frame buffer, and it.second gives a name
-         * comprising the MISO port (or "EV" for the eval board ADCs) and the
-         * channel number.  Only enabled channels are included.
-         */
-        std::map<std::size_t, std::string> adc_table() const;
+        /* rhd2k eval specific: */
 
         /** set the cable length in meters for a port */
         void set_cable_meters(mosi_id port, double meters);
@@ -125,9 +123,6 @@ public:
         bool stream_enabled(std::size_t stream) const;
         /** enable or disable a stream for data collection */
         void enable_stream(std::size_t stream, bool enabled);
-
-        /** access an rhd2000 chip by index */
-        rhd2000 const * miso(miso_id) const;
 
         void set_leds(ulong value, ulong mask=0xffffffff);
         void ttl_out(ulong value, ulong mask=0xffffffff);
