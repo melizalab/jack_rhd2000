@@ -193,7 +193,7 @@ evalboard::start(size_t max_frames)
 }
 
 bool
-evalboard::running()
+evalboard::running() const
 {
         okFrontPanel_UpdateWireOuts(_dev);
         return (okFrontPanel_GetWireOutValue(_dev, WireOutSpiRunning) & 0x01 == 1);
@@ -241,17 +241,8 @@ evalboard::enable_streams(ulong arg)
         okFrontPanel_UpdateWireIns(_dev);
 }
 
-void
-evalboard::wait(size_t nframes)
-{
-        // a naive and probably inefficient implementation: poll continuously,
-        // because average latency is 1.2 ms
-        size_t needed = nframes * frame_size() / 2;
-        while (words_in_fifo() < needed) {}
-}
-
 size_t
-evalboard::nframes()
+evalboard::nframes() const
 {
         return 2 * words_in_fifo() / frame_size();
 }
@@ -572,10 +563,10 @@ evalboard::scan_ports()
         read(buffer, nframes);
 
         // assumes little-endian
-        if (*(uint64_t*)buffer != 0xC691199927021942LL) {
+        if (*(uint64_t*)buffer != frame_header) {
                 throw daq_error("received data from board with the wrong header");
         }
-        if (*(uint64_t*)(buffer+frame_bytes) != 0xC691199927021942LL) {
+        if (*(uint64_t*)(buffer+frame_bytes) != frame_header) {
                 throw daq_error("received data with the wrong frame size");
         }
 

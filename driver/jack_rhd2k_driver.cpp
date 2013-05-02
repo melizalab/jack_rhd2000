@@ -31,13 +31,11 @@ struct rhd2k_driver_t {
 
         evalboard * dev;
         void * buffer;
+        uint32_t last_frame;    // the timestamp in the RHD data stream
+        unsigned char leds;
 
 	jack_nframes_t  period_size;
         jack_time_t     fifo_usecs; // extra fifo buffering, in usecs
-
-        jack_time_t wait_last;
-        jack_time_t wait_next;
-	int wait_late;
 
 	jack_client_t  * client;
         std::map<size_t, jack_port_t*> capture_ports; // first is byte offset,
@@ -177,6 +175,44 @@ rhd2k_driver_detach (rhd2k_driver_t *driver)
         return 0;
 }
 
+static int
+rhd2k_driver_start (rhd2k_driver_t *driver)
+{
+#ifndef NDEBUG
+        jack_info("RHD2K: starting acquisition");
+#endif
+        // flush FIFO
+        while (driver->dev->nframes()) {
+                driver->dev->read (driver->buffer, driver->period_size);
+        }
+        driver->dev->start();
+        if (!driver->dev->running()) {
+                jack_error("RHD2K: failed to start acquisition");
+                return -1;
+        }
+        // add any additional latency to the fifo
+        usleep(driver->fifo_usecs);
+        driver->last_wait_ust = driver->engine->get_microseconds();
+        driver->last_frame = 0U;
+        driver->leds = 0x01;
+        return 0;
+}
+
+static int
+rhd2k_driver_stop (rhd2k_driver_t *driver)
+{
+#ifndef NDEBUG
+        jack_info("RHD2K: stopping acquisition");
+#endif
+        // TODO silence output ports
+        driver->dev->stop();
+        if (driver->dev->running()) {
+                jack_error("RHD2K: failed to stop acquisition");
+                return -1;
+        }
+        return 0;
+}
+
 /* this function copies data from the scratch buffer into the port buffers */
 static int
 rhd2k_driver_read (rhd2k_driver_t * driver, jack_nframes_t nframes)
@@ -209,57 +245,63 @@ rhd2k_driver_read (rhd2k_driver_t * driver, jack_nframes_t nframes)
 static int
 rhd2k_driver_run_cycle (rhd2k_driver_t *driver)
 {
+        uint64_t const * magic;
+        uint32_t const * timestamp;
 	jack_engine_t *engine = driver->engine;
-        jack_time_t cycle_start;
         jack_time_t wait_enter;
-	jack_time_t wait_ret;
-	float delayed_usecs = 0.0;
 
-        // check that device is running - may have been disconnected
-        if (!driver->dev->running()) {
-                jack_error ("RHD2K: device is not running or was disconnected");
-                return -1;
-        }
-
-        cycle_start = driver->last_wait_ust + driver->period_usecs;
+        /* trust, but verify. the opal kelly fpga should be deterministic  */
+        driver->last_wait_ust += driver->period_usecs;
         wait_enter = engine->get_microseconds();
-        if (wait_enter > cycle_start) {
-                // overrun due to delayed start of process cycle (or first cycle
-                // in run) -> this should be signaled as an xrun elsewhere
-                cycle_start = 0;
+
+        // wait long enough to ensure enough data is in the FIFO
+        if (wait_enter < driver->last_wait_ust) {
+                usleep(driver->last_wait_ust - wait_enter);
         }
+        else {
+                // overrun due to delay in previous cycle - need to flush some data?
+                driver->last_wait_ust = wait_enter;
+        }
+        engine->transport_cycle_start (engine, driver->last_wait_ust);
 
-        driver->dev->wait(driver->period_size);
-        wait_ret = engine->get_microseconds();
-
-#ifndef NDEBUG
-        std::cerr << "cycle started=" << wait_enter - driver->last_wait_ust
-                  << ", wait ended=" << wait_ret - driver->last_wait_ust
-                  << ", delay=" << (long long)wait_ret - (long long)cycle_start
-                  << ", fifo=" << driver->dev->nframes() << std::endl;
-
-#endif
-
-        // read the data (need to get it off the fifo). this is relatively slow
-        // over the USB bus.
+        // read the data. this is relatively slow and eats into the process cycle
         if (driver->dev->read (driver->buffer, driver->period_size) == 0) {
                 jack_error ("RHD2K: fatal error reading data from device");
                 return -1;
         }
 
-        // if (driver->wait_last) {
-        //         delayed_usecs = wait_ret - driver->wait_last + driver->period_usecs;
-        // }
-        driver->last_wait_ust = wait_ret;
-        engine->transport_cycle_start (engine, driver->last_wait_ust);
+#if DEBUG_CYCLE
+        timestamp = (uint32_t const *)((char*)driver->buffer + sizeof(uint64_t));
+        std::cerr << "frame " << *timestamp << ": time=" << driver->last_wait_ust
+                  << ", fifo=" << driver->dev->nframes() << std::endl;
+#endif
 
-        if (delayed_usecs > 0) {
+        // verify that the last frame is correct
+        magic = (uint64_t const *)((char*)driver->buffer + driver->dev->frame_size() * (driver->period_size - 1));
+        timestamp = (uint32_t const *)(magic + 1);
+        if (*magic == evalboard::frame_header && *timestamp == (driver->last_frame + driver->period_size - 1)) {
+                driver->last_frame += driver->period_size;
+                return engine->run_cycle(engine, driver->period_size, 0.0);
+        }
+        // deal with errors:
+        // is the device running? - may have been disconnected
+        else if (!driver->dev->running()) {
+                jack_error ("RHD2K: device is not running or was disconnected");
+                return -1;
+        }
+        else {
+                // attempting to read an underfull FIFO corrupts it. could try
+                // to recover by finding the next valid frame, but it's simpler
+                // to just restart acquisition. the xruns will be fairly large
+                // with this method
+                float delayed_usecs = -1.0f * driver->last_wait_ust;
+                rhd2k_driver_stop(driver);
+                rhd2k_driver_start(driver); // sets new ust
+                delayed_usecs += driver->last_wait_ust;
                 jack_error("xrun of %.3f usec", delayed_usecs);
                 engine->delay (engine, delayed_usecs);
                 return 0;
         }
-
-        return engine->run_cycle(engine, driver->period_size, 0.0);
 
 }
 
@@ -275,41 +317,6 @@ rhd2k_driver_null_cycle (rhd2k_driver_t* driver, jack_nframes_t nframes)
 	}
 
         driver->dev->read (driver->buffer, driver->period_size);
-        return 0;
-}
-
-static int
-rhd2k_driver_start (rhd2k_driver_t *driver)
-{
-#ifndef NDEBUG
-        jack_info("RHD2K: starting acquisition");
-#endif
-        // flush FIFO
-        while (driver->dev->nframes()) {
-                driver->dev->read (driver->buffer, driver->period_size);
-        }
-        driver->dev->start();
-        if (!driver->dev->running()) {
-                jack_error("RHD2K: failed to start acquisition");
-                return -1;
-        }
-        // wait for the FIFO to fill
-        usleep(driver->period_usecs + driver->fifo_usecs);
-        return 0;
-}
-
-static int
-rhd2k_driver_stop (rhd2k_driver_t *driver)
-{
-#ifndef NDEBUG
-        jack_info("RHD2K: stopping acquisition");
-#endif
-        // TODO silence output ports
-        driver->dev->stop();
-        if (driver->dev->running()) {
-                jack_error("RHD2K: failed to stop acquisition");
-                return -1;
-        }
         return 0;
 }
 

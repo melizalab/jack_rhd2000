@@ -32,20 +32,10 @@ public:
         virtual void start(std::size_t max_frames=0) = 0;
 
         /** true if data acqusition is in process */
-        virtual bool running() = 0;
+        virtual bool running() const = 0;
 
         /** Stop data collection */
         virtual void stop() = 0;
-
-        /**
-         * Wait until at least @a nframes are available for read().
-         *
-         * @param nframes  the number of required frames
-         */
-        virtual void wait(std::size_t nframes) = 0;
-
-        /** Return the number of frames in the interface buffer */
-        virtual std::size_t nframes() = 0;
 
         /**
          * Copy data from the interface into memory
@@ -61,6 +51,9 @@ public:
          */
         virtual std::size_t read(void * tgt, std::size_t nframes) = 0;
 
+        /** Return the number of frames available to read() */
+        virtual std::size_t nframes() const = 0;
+
         /** the current sampling rate */
         virtual std::size_t sampling_rate() const = 0;
 
@@ -68,10 +61,10 @@ public:
         virtual std::size_t frame_size() const = 0;
 
         /** the number of active analog input channels */
-        virtual std::size_t adc_channels() { return 0; }
+        virtual std::size_t adc_channels() const { return 0; }
 
         /** the number of active analog output channels */
-        virtual std::size_t dac_nchannels() { return 0; }
+        virtual std::size_t dac_nchannels() const { return 0; }
 
 };
 

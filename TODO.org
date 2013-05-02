@@ -287,7 +287,7 @@ jack 2 to compile for OS X, either with waf or with xcode.
 
 we're unlikely to be using the software on macs, but maximum portability is good.
 
-** TODO optimize xrun detection and handling
+** DONE optimize xrun detection and handling
 
 it's a little confusing how run_cycle is supposed to work. It clearly needs to
 wait until there's enough data in the fifo to fill the port buffers. In my first
@@ -337,7 +337,7 @@ plus the padding before polling.  Quick test - fifo quickly empties, because the
 next cycle is initiated immediately after sufficient samples are acquired.
 The engine doesn't wait before initiating the next cycle.
 
-*** TODO check timestamp of returned data
+*** DONE check timestamp of returned data
 
 this option takes advantage of the fact that the FPGA should behave
 deterministically, so if we simply wait the appropriate amount of time on the
@@ -347,8 +347,19 @@ corresponding to the number of frames). If it's not, there's been an underrun -
 but that shouldn't happen anyway. This may hinge on usleep being sufficiently
 precise.
 
+this appears to work really well! should probably monitor the FIFO every so
+often to update latency
+
 ** TODO handle opal kelly errors?
 
 many of the okFrontPanel functions return error codes, which are not currently
 handled.  Likewise, the driver functions probably need to have try/catch blocks
 for calls into the rhd2000 interface.
+
+** TODO do impedance testing?
+
+** TODO add latency callback
+
+maybe poll fifo to estimate upper end?
+
+** TODO add hardware monitoring

@@ -35,6 +35,8 @@ public:
         static const std::size_t nmosi = 4;
         /// number of inputs (= number of MISO lines)
         static const std::size_t nmiso = 8;
+        /// all returned frames should start with this value
+        static const uint64_t frame_header = 0xc691199927021942LL;
 
         enum mosi_id {
                 PortA = 0,
@@ -65,10 +67,9 @@ public:
 
         /* daq_interface virtual member functions */
         void start(std::size_t max_frames=0);
-        bool running();
+        bool running() const;
         void stop();
-        void wait(std::size_t);
-        std::size_t nframes();
+        std::size_t nframes() const;
         std::size_t frame_size() const;
         std::size_t sampling_rate() const { return _sampling_rate; }
         std::size_t adc_channels() const;
