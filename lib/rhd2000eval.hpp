@@ -20,11 +20,17 @@ struct ok_error : public daq_error {
         char const * what() const throw();
 };
 
+/**
+ * Represents an RHD2000 eval board data acquisition system.
+ *
+ */
 class evalboard : public daq_interface {
 
 public:
         /// how the digitized samples are stored
         typedef short data_type;
+        /// the maximum value of the data type
+        static const float data_type_max = 32768.0f;
         /// number of output ports (= number of MOSI lines)
         static const std::size_t nmosi = 4;
         /// number of inputs (= number of MISO lines)
@@ -61,7 +67,8 @@ public:
         void start(std::size_t max_frames=0);
         bool running();
         void stop();
-        std::size_t nframes_ready();
+        void wait(std::size_t);
+        std::size_t nframes();
         std::size_t frame_size() const;
         std::size_t sampling_rate() const { return _sampling_rate; }
         std::size_t adc_channels() const;
@@ -77,9 +84,10 @@ public:
         /**
          * @overload daq_interface::read()
          *
-         * @note if the RHD2000eval FIFO contains less than the requested number
-         * of samples, the last sample in the buffer will be repeated, so it's
-         * important to check whether enough frames are ready
+         * @return the number of frames read, or 0 if there was an error. If the
+         * RHD2000eval FIFO contains less than the requested number of samples,
+         * the last sample in the buffer will be repeated, so it's important to
+         * check whether enough frames are ready
          */
         std::size_t read(void *, std::size_t);
 

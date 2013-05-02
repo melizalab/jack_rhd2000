@@ -179,7 +179,7 @@ checking DAC and some registers on the amplifier.
 I implemented this by setting sampling rate in the constructor for the eval
 board and the amps - no need to support changes to it in a jack-based system.
 
-** TODO data memory storage
+** DONE data memory storage
 
 data are copied out of the eval board's fifo in a fairly complex structure whose
 sizes depend on the number of enabled data streams
@@ -246,7 +246,7 @@ is big-endian.
 
 ** DONE allow user to set per-amplifier filter and amp power values
 
-** TODO JACK driver parameters
+** DONE JACK driver parameters
 
 user needs to set
 
@@ -275,7 +275,7 @@ add to docs how to list usb devices
 os x : system_profiler SPUSBDataType
 linux: lsusb
 
-** TODO JACK driver skeleton
+** DONE JACK driver skeleton
 
 writing this jack driver is a bit of a pain. The server code is exported as a shared
 library, but the headers are not, so one either has to link into the jack
@@ -285,6 +285,70 @@ I'd sort of prefer to write the driver for jack 2, because the rhd code is in
 C++, and the jack server headers have c++ syntax errors.  However, I can't get
 jack 2 to compile for OS X, either with waf or with xcode.
 
-we're unlikely to be using the software on macs, but
+we're unlikely to be using the software on macs, but maximum portability is good.
 
+** TODO optimize xrun detection and handling
 
+it's a little confusing how run_cycle is supposed to work. It clearly needs to
+wait until there's enough data in the fifo to fill the port buffers. In my first
+attempt, I just estimate the amount of time needed for sleep, then call read().
+It takes about 3.8 ms to pull 1024 frames of data (106496 bytes) off the usb
+bus. Scales with period size, but not linearly. At the USB 2.0 max rate of 39
+MB/s, this much data should take 2.7 ms, so we're doing pretty well. The main
+problem with doing it this way is that we use up precious RT thread time waiting
+for the data to come over the bus. If this is a problem, switch to a threaded
+model.
+
+Two types of xruns can occur.  If the process cycle doesn't get back to
+run_cycle in time, the fifo will start to accumulate frames (i.e. overrun). In
+principle, JACK should detect when this is occurring by the fact that the time
+between calls to run_cycle() are longer than a period.  The FIFO will start to
+accumulate frames, but these will be consumed in subsequent cycle(s).
+
+Underruns occur if the fifo fails to fill in time for the next process cycle.
+This is calculated by comparing the time when the fifo is full with the time
+that the cycle is supposed to start (period_usec plus the last cycle start).
+This value is all over the place.  Possibly due to variability in response to
+wire out queries.
+
+Quick test indicates that polling the fifo takes 1.2 ms on average, which is
+consistent with the range of underrun delays I'm seeing.  This is also
+consistent with the published rate of 800 UpdateWireOut operations per second.
+
+One idea would be to let the fifo run with a few frames (1.2 ms ~ 37 frames) as
+a buffer. Of course that adds latency, and it only really helps if I use that
+buffering to pre-emptively start transfer operations (i.e. add in the estimated
+delay from the poll operation in the wait function).  This is probably only an
+average case solution because the wireout operation is nondeterministic.
+
+Further testing on polling and reading indicates that the worst-case scenarios
+are pretty bad.  After reading 20,000 periods, I had max poll times of 21 ms and
+max read times of 52 ms.
+
+Threading the driver may help with reads, but not as much with polls.
+
+*** CANCELED add extra latency option
+
+user specifies extra latency on the command line. After starting acquisition,
+wait enough time for the fifo to fill that much. How to maintain that padding?
+
+Option 1. Wait until fifo > period_size. In this case I have to wait one period
+plus the padding before polling.  Quick test - fifo quickly empties, because the
+next cycle is initiated immediately after sufficient samples are acquired.
+The engine doesn't wait before initiating the next cycle.
+
+*** TODO check timestamp of returned data
+
+this option takes advantage of the fact that the FPGA should behave
+deterministically, so if we simply wait the appropriate amount of time on the
+host there should be sufficient data in the FIFO. This can be checked by
+verifying that the last frame's header is as expected (magic number, timestamp
+corresponding to the number of frames). If it's not, there's been an underrun -
+but that shouldn't happen anyway. This may hinge on usleep being sufficiently
+precise.
+
+** TODO handle opal kelly errors?
+
+many of the okFrontPanel functions return error codes, which are not currently
+handled.  Likewise, the driver functions probably need to have try/catch blocks
+for calls into the rhd2000 interface.

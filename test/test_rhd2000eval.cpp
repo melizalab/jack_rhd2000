@@ -2,48 +2,112 @@
 #include <iostream>
 #include <iomanip>
 #include <boost/shared_ptr.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 #include "rhd2000eval.hpp"
 
 using namespace rhd2k;
 using namespace std;
+using namespace boost::posix_time;
 
 static const size_t sampling_rate = 30000;
 static const size_t period_size = 1024;
 static const size_t nperiods = 20;
 boost::shared_ptr<evalboard> dev;
 
+void
+stats(std::ostream & o, double psum, double p2sum, double pmax, size_t n)
+{
+        psum /= n;
+        p2sum /= n;
+        o << "mean: " << psum << ", stdev: " << sqrt(p2sum - psum * psum) << ", max: " << pmax << endl;
+}
+
+
+// void
+// test_buffer_poll()
+// {
+//
+
+//         cout << "Testing poll rate: " << endl;
+//         // test rate of wire out queries
+//         const size_t reps = 10000;
+//         long max = 0;
+//         for (size_t i = 0; i < reps; ++i) {
+//                 ptime start(microsec_clock::universal_time());
+//                 size_t n = dev->nframes();
+//                 ptime stop(microsec_clock::universal_time());
+//                 long us = (stop - start).total_microseconds();
+//                 max = std::max(us,max);
+//                 e += us;
+//                 e2 += us * us;
+//         }
+//         double mean = e / reps;
+//         std::cout << "average wait: " << mean << "; stdev: " << sqrt(e2 / reps - mean * mean)
+//                   << "; max: " << max << std::endl;
+// }
 
 int
 main(int, char**)
 {
         char * buffer;
-        float * values;  // [nchan][period_size]
         dev.reset(new evalboard(sampling_rate));
         dev->configure_port(evalboard::PortA, 100, 3000, 1, 0x0000ffff);
         dev->scan_ports();
 
         cout << *dev << endl;
 
-        // stream some data and convert it to floats
-        size_t nchannels = dev->adc_channels();
-        buffer = new char[dev->frame_size() * period_size];
-        values = new float[nchannels * period_size];
+        // accumulators for calculating average delays
+        double us;
+        ptime start, stop;
+        double pmax = 0;
+        double psum = 0;
+        double p2sum = 0;
 
-        cout << "streaming with frame size " << dev->frame_size() << " bytes" << endl;
+        double rmax = 0, rsum = 0, r2sum = 0;
+
+        // stream some data
+        size_t period = 0;
+        size_t frames;
+        buffer = new char[dev->frame_size() * period_size];
+
+        cout << "streaming with frame size " << dev->frame_size() << " bytes, transfer size "
+             << dev->frame_size() * period_size << endl;
         dev->start();
-        for (std::size_t period = 0; period < nperiods; ++period) {
-                while (dev->nframes_ready() < period_size) {
-                        usleep(1);
+        while (1) {
+                // poll
+                start = microsec_clock::universal_time();
+                frames = dev->nframes();
+                stop = microsec_clock::universal_time();
+
+                if (frames < period_size) {
+                        usleep(100);
+                        continue;
                 }
+
+                us = (stop - start).total_microseconds();
+                us /= 1e3;
+                pmax = std::max(us,pmax);
+                psum += us;
+                p2sum += us * us;
+
+                // read
+                start = microsec_clock::universal_time();
                 dev->read(buffer, period_size);
-                cout << "period " << period << ": frame=" << *(uint*)(buffer+8) << endl;
+                stop = microsec_clock::universal_time();
+                us = (stop - start).total_microseconds();
+                us /= 1e3;
+                cout << "\rperiod " << period << ": frame=" << *(uint*)(buffer+8) << flush;
+                rmax = std::max(us,rmax);
+                rsum += us;
+                r2sum += us * us;
+
+                period++;
+                if (period % 100 == 0) {
+                        stats(cout << "\npoll time: ", psum, p2sum, pmax, period);
+                        stats(cout << "read time: ", rsum, r2sum, rmax, period);
+                }
         }
-        dev->stop();
-        size_t last = dev->nframes_ready();
-        if (last) {
-                dev->read(buffer, last);
-                cout << "last period: frame: " << *(uint*)(buffer+8) << endl;
-        }
+
         cout << "end of test" << endl;
 
 }

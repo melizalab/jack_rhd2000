@@ -132,6 +132,9 @@ evalboard::evalboard(size_t sampling_rate, char const * serial, char const * fir
         if ((ec = okFrontPanel_OpenBySerial(_dev, serial)) != ok_NoError) {
                 throw ok_error(ec);
         }
+        if (okFrontPanel_IsHighSpeed(_dev) == false) {
+                throw daq_error("Opal Kelly device is connected on a low speed bus");
+        }
 
         // configure pll
         okFrontPanel_LoadDefaultPLLConfiguration(_dev);
@@ -157,6 +160,7 @@ evalboard::evalboard(size_t sampling_rate, char const * serial, char const * fir
         }
         _board_version = okFrontPanel_GetWireOutValue(_dev, WireOutBoardVersion);
 
+        stop();
         reset_board();
         set_sampling_rate();
 }
@@ -237,8 +241,17 @@ evalboard::enable_streams(ulong arg)
         okFrontPanel_UpdateWireIns(_dev);
 }
 
+void
+evalboard::wait(size_t nframes)
+{
+        // a naive and probably inefficient implementation: poll continuously,
+        // because average latency is 1.2 ms
+        size_t needed = nframes * frame_size() / 2;
+        while (words_in_fifo() < needed) {}
+}
+
 size_t
-evalboard::nframes_ready()
+evalboard::nframes()
 {
         return 2 * words_in_fifo() / frame_size();
 }
@@ -264,8 +277,9 @@ size_t
 evalboard::read(void * arg, size_t nframes)
 {
         size_t bytes = nframes * frame_size();
-        okFrontPanel_ReadFromPipeOut(_dev, PipeOutData, bytes, static_cast<unsigned char *>(arg));
-        return nframes;
+        long ret = okFrontPanel_ReadFromPipeOut(_dev, PipeOutData, bytes, static_cast<unsigned char *>(arg));
+        if (ret <= 0) return 0; // error
+        else return ret / frame_size();
 }
 
 size_t
@@ -289,8 +303,11 @@ evalboard::adc_table() const
                         if (chip->amp_power(c)) {
                                 std::ostringstream name;
                                 name << (miso_id)i << '_' << c;
-                                // byte offset: base + chan * nstreams + stream
-                                offset = sizeof(data_type) * (base_offset + (c * streams_enabled() + active_stream));
+                                // byte offset: base + (chan+3) * nstreams + stream
+                                // (the 3-channel offset relates to the fact that
+                                // the aux data from the previous time step
+                                // comes first - see p 9 in manual)
+                                offset = sizeof(data_type) * (base_offset + ((c+3) * streams_enabled() + active_stream));
                                 ret[offset] = name.str();
                         }
                 }
@@ -551,7 +568,7 @@ evalboard::scan_ports()
         }
 
         //  do some basic sanity checks
-        assert(nframes_ready() == nframes);
+        assert(words_in_fifo() == nframes * frame_size() / 2);
         read(buffer, nframes);
 
         // assumes little-endian

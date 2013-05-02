@@ -33,10 +33,15 @@ struct rhd2k_driver_t {
         void * buffer;
 
 	jack_nframes_t  period_size;
-        long eval_adc_enabled;
+        jack_time_t     fifo_usecs; // extra fifo buffering, in usecs
+
+        jack_time_t wait_last;
+        jack_time_t wait_next;
+	int wait_late;
 
 	jack_client_t  * client;
-        std::list<jack_port_t*> capture_ports;
+        std::map<size_t, jack_port_t*> capture_ports; // first is byte offset,
+        long eval_adc_enabled;
 };
 
 struct rhd2k_amp_settings_t {
@@ -101,6 +106,9 @@ parse_port_config(char pchar, char const * arg, rhd2k_jack_settings_t & s)
 static int
 rhd2k_driver_attach (rhd2k_driver_t *driver)
 {
+#ifndef NDEBUG
+        jack_info("RHD2K: attaching driver");
+#endif
 	jack_port_t *port = 0;
         // inform the engine of sample rate and buffer size
 	if (driver->engine->set_buffer_size (driver->engine, driver->period_size)) {
@@ -115,6 +123,9 @@ rhd2k_driver_attach (rhd2k_driver_t *driver)
                 jack_error ("RHD2K: unable to allocate buffer");
                 return -1;
         }
+#ifndef NDEBUG
+        jack_info("RHD2K: scratch buffer size=%ld bytes", driver->dev->frame_size() * driver->period_size);
+#endif
 
         // create ports
 	const int port_flags = JackPortIsOutput|JackPortIsPhysical|JackPortIsTerminal;
@@ -134,10 +145,8 @@ rhd2k_driver_attach (rhd2k_driver_t *driver)
                                     jack_error ("RHD2K: cannot register port for %s", name);
                         break;
                 }
-                driver->capture_ports.push_back(port);
+                driver->capture_ports[it->first] = port;
         }
-
-        // flush input buffers?
 
 	return jack_activate (driver->client);
 
@@ -146,16 +155,19 @@ rhd2k_driver_attach (rhd2k_driver_t *driver)
 static int
 rhd2k_driver_detach (rhd2k_driver_t *driver)
 {
+#ifndef NDEBUG
+        jack_info("RHD2K: detaching driver");
+#endif
 	if (driver->engine == NULL) {
 		return 0;
 	}
 
-        std::list<jack_port_t*>::const_iterator it;
+        std::map<size_t, jack_port_t*>::const_iterator it;
 	for (it = driver->capture_ports.begin(); it != driver->capture_ports.end(); ++it) {
 #ifndef NDEBUG
-                jack_info("Unregistering capture port %s", jack_port_name(*it));
+                jack_info("Unregistering capture port %s", jack_port_name(it->second));
 #endif
-                jack_port_unregister (driver->client, *it);
+                jack_port_unregister (driver->client, it->second);
 	}
         driver->capture_ports.clear();
 
@@ -165,39 +177,179 @@ rhd2k_driver_detach (rhd2k_driver_t *driver)
         return 0;
 }
 
+/* this function copies data from the scratch buffer into the port buffers */
 static int
 rhd2k_driver_read (rhd2k_driver_t * driver, jack_nframes_t nframes)
-{}
+{
+        evalboard::data_type * p;
 
-static jack_nframes_t
-rhd2k_driver_wait (rhd2k_driver_t *driver, int extra_fd, int *status,
-		   float *delayed_usecs)
-{}
+        // the port list
+        std::map<size_t, jack_port_t*>::const_iterator it;
+	for (it = driver->capture_ports.begin(); it != driver->capture_ports.end(); ++it) {
+                jack_port_t * port = it->second;
+                jack_default_audio_sample_t * buf =
+                        reinterpret_cast<jack_default_audio_sample_t *>(jack_port_get_buffer (port, nframes));
+                int nconnections = jack_port_connected (port);
+                if (nconnections) {
+                        // copy the data, converting to floats
+                        for (jack_nframes_t t = 0; t < nframes; ++t) {
+                                p = reinterpret_cast<evalboard::data_type*>(
+                                        (char*)driver->buffer + it->first + t * driver->dev->frame_size());
+                                buf[t] = *p / evalboard::data_type_max;
+                        }
+                }
+                else {
+                        // silence the port buffer
+                        memset(buf, 0, nframes * sizeof(jack_default_audio_sample_t));
+                }
+        }
+        return 0;
+}
 
 static int
 rhd2k_driver_run_cycle (rhd2k_driver_t *driver)
-{}
+{
+	jack_engine_t *engine = driver->engine;
+        jack_time_t cycle_start;
+        jack_time_t wait_enter;
+	jack_time_t wait_ret;
+	float delayed_usecs = 0.0;
+
+        // check that device is running - may have been disconnected
+        if (!driver->dev->running()) {
+                jack_error ("RHD2K: device is not running or was disconnected");
+                return -1;
+        }
+
+        cycle_start = driver->last_wait_ust + driver->period_usecs;
+        wait_enter = engine->get_microseconds();
+        if (wait_enter > cycle_start) {
+                // overrun due to delayed start of process cycle (or first cycle
+                // in run) -> this should be signaled as an xrun elsewhere
+                cycle_start = 0;
+        }
+
+        driver->dev->wait(driver->period_size);
+        wait_ret = engine->get_microseconds();
+
+#ifndef NDEBUG
+        std::cerr << "cycle started=" << wait_enter - driver->last_wait_ust
+                  << ", wait ended=" << wait_ret - driver->last_wait_ust
+                  << ", delay=" << (long long)wait_ret - (long long)cycle_start
+                  << ", fifo=" << driver->dev->nframes() << std::endl;
+
+#endif
+
+        // read the data (need to get it off the fifo). this is relatively slow
+        // over the USB bus.
+        if (driver->dev->read (driver->buffer, driver->period_size) == 0) {
+                jack_error ("RHD2K: fatal error reading data from device");
+                return -1;
+        }
+
+        // if (driver->wait_last) {
+        //         delayed_usecs = wait_ret - driver->wait_last + driver->period_usecs;
+        // }
+        driver->last_wait_ust = wait_ret;
+        engine->transport_cycle_start (engine, driver->last_wait_ust);
+
+        if (delayed_usecs > 0) {
+                jack_error("xrun of %.3f usec", delayed_usecs);
+                engine->delay (engine, delayed_usecs);
+                return 0;
+        }
+
+        return engine->run_cycle(engine, driver->period_size, 0.0);
+
+}
 
 static int
 rhd2k_driver_null_cycle (rhd2k_driver_t* driver, jack_nframes_t nframes)
-{}
+{
+#ifndef NDEBUG
+        jack_info("RHD2K: null cycle");
+#endif
+        /* null cycle - read and discard input data */
+	if (driver->engine->freewheeling) {
+		return 0;
+	}
+
+        driver->dev->read (driver->buffer, driver->period_size);
+        return 0;
+}
 
 static int
 rhd2k_driver_start (rhd2k_driver_t *driver)
-{}
+{
+#ifndef NDEBUG
+        jack_info("RHD2K: starting acquisition");
+#endif
+        // flush FIFO
+        while (driver->dev->nframes()) {
+                driver->dev->read (driver->buffer, driver->period_size);
+        }
+        driver->dev->start();
+        if (!driver->dev->running()) {
+                jack_error("RHD2K: failed to start acquisition");
+                return -1;
+        }
+        // wait for the FIFO to fill
+        usleep(driver->period_usecs + driver->fifo_usecs);
+        return 0;
+}
 
 static int
 rhd2k_driver_stop (rhd2k_driver_t *driver)
-{}
+{
+#ifndef NDEBUG
+        jack_info("RHD2K: stopping acquisition");
+#endif
+        // TODO silence output ports
+        driver->dev->stop();
+        if (driver->dev->running()) {
+                jack_error("RHD2K: failed to stop acquisition");
+                return -1;
+        }
+        return 0;
+}
 
 static int
 rhd2k_driver_bufsize (rhd2k_driver_t* driver, jack_nframes_t nframes)
-{}
+{
+#ifndef NDEBUG
+        jack_info("RHD2K: resizing buffer to %ld", nframes);
+#endif
+        rhd2k_driver_stop(driver);
+
+        // update variables
+	driver->period_size = nframes;
+        driver->period_usecs =
+                (jack_time_t) floor ((((float) driver->period_size) * 1000000.0f) / driver->dev->sampling_rate());
+	if (driver->engine->set_buffer_size (driver->engine, nframes)) {
+		jack_error ("RHD2K: cannot set engine buffer size to %d", nframes);
+		return -1;
+	}
+
+        // realloc buffer
+        free (driver->buffer);
+        driver->buffer = malloc (driver->dev->frame_size() * driver->period_size);
+        if (driver->buffer == 0) {
+                jack_error ("RHD2K: unable to allocate buffer");
+                return -1;
+        }
+
+        rhd2k_driver_start(driver);
+
+        return 0;
+}
 
 static rhd2k_driver_t *
 rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmware,
                  rhd2k_jack_settings_t &settings)
 {
+#ifndef NDEBUG
+        jack_info("RHD2K: initializing driver");
+#endif
         rhd2k_driver_t * driver = new rhd2k_driver_t;
 
 	/* Setup the jack interfaces */
@@ -241,10 +393,14 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
 
                 driver->period_usecs =
                         (jack_time_t) floor ((((float) driver->period_size) * 1000000.0f) / driver->dev->sampling_rate());
+                driver->fifo_usecs =
+                        (jack_time_t) floor ((((float) settings.capture_frame_latency) * 1000000.0f) / driver->dev->sampling_rate());
 
                 std::cout << *driver->dev
                           << "\nperiod = " << driver->period_size
-                          << " frames (" << (driver->period_usecs / 1000.0f) << " ms)" << std::endl;
+                          << " frames (" << (driver->period_usecs / 1000.0f) << " ms)"
+                          << "\nFIFO buffering = " << settings.capture_frame_latency
+                          << " frames (" << (driver->fifo_usecs / 1000.0f) << " ms)" << std::endl;
                 return driver;
         }
         catch (std::runtime_error const & e) {
@@ -258,6 +414,9 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
 static void
 rhd2k_driver_delete(rhd2k_driver_t * driver)
 {
+#ifndef NDEBUG
+        jack_info("RHD2K: deleting driver");
+#endif
         if (driver == 0) return;
         jack_driver_nt_finish ((jack_driver_nt_t *) driver);
         if (driver->dev) delete driver->dev;
@@ -334,7 +493,7 @@ driver_get_descriptor ()
         param->character = 'I';
         param->type = JackDriverParamUInt;
         param->value.ui = default_settings.capture_frame_latency;
-        strcpy(param->short_desc, "extra input latency (frames) ");
+        strcpy(param->short_desc, "extra fifo latency (frames) ");
         strcpy(param->long_desc, param->short_desc);
 
         return desc;

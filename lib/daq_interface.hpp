@@ -37,8 +37,15 @@ public:
         /** Stop data collection */
         virtual void stop() = 0;
 
-        /** the number of frames available in the interface's buffer */
-        virtual std::size_t nframes_ready() = 0;
+        /**
+         * Wait until at least @a nframes are available for read().
+         *
+         * @param nframes  the number of required frames
+         */
+        virtual void wait(std::size_t nframes) = 0;
+
+        /** Return the number of frames in the interface buffer */
+        virtual std::size_t nframes() = 0;
 
         /**
          * Copy data from the interface into memory
