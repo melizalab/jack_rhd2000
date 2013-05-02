@@ -32,13 +32,12 @@ struct rhd2k_driver_t {
         evalboard * dev;
         void * buffer;
         uint32_t last_frame;    // the timestamp in the RHD data stream
-        unsigned char leds;
 
 	jack_nframes_t  period_size;
         jack_time_t     fifo_usecs; // extra fifo buffering, in usecs
 
 	jack_client_t  * client;
-        std::map<size_t, jack_port_t*> capture_ports; // first is byte offset,
+        std::vector<jack_port_t*> capture_ports;
         long eval_adc_enabled;
 };
 
@@ -126,29 +125,27 @@ rhd2k_driver_attach (rhd2k_driver_t *driver)
 #endif
 
         // create ports
-        std::map<size_t, string> channels = driver->dev->adc_table();
-        std::map<size_t, string>::const_iterator it;
-        for (it = channels.begin(); it != channels.end(); ++it) {
+        std::vector<evalboard::channel_info_t>::const_iterator it;
+        for (it = driver->dev->adc_table().begin(); it != driver->dev->adc_table().end(); ++it) {
                 int port_flags = JackPortIsOutput|JackPortIsPhysical|JackPortIsTerminal;
-                char const * name = it->second.c_str();
-                size_t idx;
+                char const * name = it->name.c_str();
                 // filter eval board ADC channels
-                if (sscanf(name,"EV_%zd", &idx) > 0) {
-                        if (!(driver->eval_adc_enabled & 1 << idx)) continue;
+                if (it->stream == evalboard::EvalADC) {
+                        if (!(driver->eval_adc_enabled & 1 << it->channel)) continue;
                 }
                 else {
                         port_flags |= JackPortCanMonitor;
                 }
 #ifndef NDEBUG
-                jack_info("Registering capture port %s (offset = %zd)", name, it->first);
+                jack_info("Registering capture port %s (offset = %zd)", name, it->byte_offset);
 #endif
-                            if ((port = jack_port_register (driver->client, name,
+                if ((port = jack_port_register (driver->client, name,
                                                 JACK_DEFAULT_AUDIO_TYPE,
                                                 port_flags, 0)) == NULL) {
-                                    jack_error ("RHD2K: cannot register port for %s", name);
+                        jack_error ("RHD2K: cannot register port for %s", name);
                         break;
                 }
-                driver->capture_ports[it->first] = port;
+                driver->capture_ports.push_back(port);
         }
 
 	return jack_activate (driver->client);
@@ -165,12 +162,12 @@ rhd2k_driver_detach (rhd2k_driver_t *driver)
 		return 0;
 	}
 
-        std::map<size_t, jack_port_t*>::const_iterator it;
+        std::vector<jack_port_t*>::const_iterator it;
 	for (it = driver->capture_ports.begin(); it != driver->capture_ports.end(); ++it) {
 #ifndef NDEBUG
-                jack_info("Unregistering capture port %s", jack_port_name(it->second));
+                jack_info("Unregistering capture port %s", jack_port_name(*it));
 #endif
-                jack_port_unregister (driver->client, it->second);
+                jack_port_unregister (driver->client, *it);
 	}
         driver->capture_ports.clear();
 
@@ -199,7 +196,6 @@ rhd2k_driver_start (rhd2k_driver_t *driver)
         usleep(driver->fifo_usecs);
         driver->last_wait_ust = driver->engine->get_microseconds();
         driver->last_frame = 0U;
-        driver->leds = 0x01;
         return 0;
 }
 
@@ -228,17 +224,17 @@ rhd2k_driver_read (rhd2k_driver_t * driver, jack_nframes_t nframes)
         }
 
         // the port list
-        std::map<size_t, jack_port_t*>::const_iterator it;
-	for (it = driver->capture_ports.begin(); it != driver->capture_ports.end(); ++it) {
-                jack_port_t * port = it->second;
+        std::vector<evalboard::channel_info_t>::const_iterator chan = driver->dev->adc_table().begin();
+        std::vector<jack_port_t*>::const_iterator port = driver->capture_ports.begin();
+	for (; port != driver->capture_ports.end(); ++port, ++chan) {
                 jack_default_audio_sample_t * buf =
-                        reinterpret_cast<jack_default_audio_sample_t *>(jack_port_get_buffer (port, nframes));
-                int nconnections = jack_port_connected (port);
+                        reinterpret_cast<jack_default_audio_sample_t *>(jack_port_get_buffer (*port, nframes));
+                int nconnections = jack_port_connected (*port);
                 if (nconnections) {
                         // copy the data, converting to floats
                         for (jack_nframes_t t = 0; t < nframes; ++t) {
                                 p = reinterpret_cast<evalboard::data_type*>(
-                                        (char*)driver->buffer + it->first + t * driver->dev->frame_size());
+                                        (char*)driver->buffer + chan->byte_offset + t * driver->dev->frame_size());
                                 buf[t] = *p / evalboard::data_type_max;
                         }
                 }
@@ -261,9 +257,10 @@ rhd2k_driver_write (rhd2k_driver_t * driver, jack_nframes_t nframes)
         // the port list
         const size_t available_dacs = driver->dev->dac_nchannels();
         size_t dac = 0;
-        std::map<size_t, jack_port_t*>::const_iterator it;
-	for (it = driver->capture_ports.begin(); it != driver->capture_ports.end() && dac < available_dacs; ++it) {
-                if (jack_port_monitoring_input(it->second)) {
+        std::vector<evalboard::channel_info_t>::const_iterator chan = driver->dev->adc_table().begin();
+        std::vector<jack_port_t*>::const_iterator port = driver->capture_ports.begin();
+	for (; port != driver->capture_ports.end() && dac < available_dacs; ++port, ++chan) {
+                if (jack_port_monitoring_input(*port)) {
                         // driver->dev->dac_monitor(dac++,
                 }
         }

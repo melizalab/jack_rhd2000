@@ -235,9 +235,10 @@ evalboard::enable_streams(ulong arg)
 {
         assert (arg <= 0x00ff);
         _enabled_streams = arg;
-        _nactive_streams = std::bitset<nmiso>(arg).count();
         okFrontPanel_SetWireInValue(_dev, WireInDataStreamEn, _enabled_streams, ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
+        _nactive_streams = std::bitset<nmiso>(arg).count();
+        _adc_table.clear();     // invalidate table
 }
 
 size_t
@@ -278,40 +279,56 @@ evalboard::adc_channels() const
         return adc_table().size();
 }
 
-std::map<size_t, string>
+std::vector<evalboard::channel_info_t> const &
 evalboard::adc_table() const
 {
+        if (_adc_table.empty()) make_adc_table();
+        return _adc_table;
+}
+
+void
+evalboard::make_adc_table() const
+{
         const size_t base_offset = 6; // first words in frame
-        std::map<size_t, string> ret;
-        size_t active_stream = 0;
-        size_t offset;
+        _adc_table.resize(naux_adcs + _nactive_streams * rhd2000::max_amps);
+
+        size_t chan_count = 0;
+        size_t stream_count = 0;
         // miso lines
         for (size_t i = 0; i < evalboard::nmiso; ++i) {
                 if (!stream_enabled(i)) continue;
                 rhd2000 const * chip = _miso[i];
                 for (size_t c = 0; c < rhd2000::max_amps; ++c) {
-                        if (chip->amp_power(c)) {
-                                std::ostringstream name;
-                                name << (miso_id)i << '_' << c;
-                                // byte offset: base + (chan+3) * nstreams + stream
-                                // (the 3-channel offset relates to the fact that
-                                // the aux data from the previous time step
-                                // comes first - see p 9 in manual)
-                                offset = sizeof(data_type) * (base_offset + ((c+3) * streams_enabled() + active_stream));
-                                ret[offset] = name.str();
-                        }
+                        if (!chip->amp_power(c)) continue;
+
+                        std::ostringstream name;
+                        channel_info_t & chan = _adc_table[chan_count++];
+                        chan.stream  = (miso_id)stream_count;
+                        chan.channel = c;
+
+                        name << chan.stream << '_' << c;
+                        chan.name    = name.str();
+
+                        // byte offset: base + (chan+3) * nstreams + stream (the
+                        // 3-channel offset relates to the fact that the aux
+                        // data from the previous time step comes first - see p
+                        // 9 in manual)
+                        chan.byte_offset = sizeof(data_type) * (base_offset + ((c+3) * streams_enabled() + stream_count));
                 }
-                active_stream += 1;
+                stream_count += 1;
         }
         // eval board adcs
-        for (size_t i = 0; i < naux_adcs; ++i) {
+        for (size_t c = 0; c < naux_adcs; ++c) {
                 std::ostringstream name;
-                name << "EV_" << i;
-                offset = sizeof(data_type) * (base_offset + (36 * streams_enabled()) + i);
-                ret[offset] = name.str();
-        }
+                channel_info_t & chan = _adc_table[chan_count++];
+                chan.stream = EvalADC;
+                chan.channel = c;
 
-        return ret;
+                name << chan.stream << '_' << c;
+                chan.name = name.str();
+                chan.byte_offset = sizeof(data_type) * (base_offset + (36 * streams_enabled()) + c);
+        }
+        _adc_table.resize(chan_count);
 }
 
 void
@@ -517,13 +534,17 @@ evalboard::configure_port(mosi_id port, double lower, double upper,
         amp->set_lower_bandwidth(lower);
         amp->set_upper_bandwidth(upper);
         amp->set_dsp_cutoff(dsp);
-        amp->set_amp_power(amp_power);
+        if (amp->amp_power() != amp_power) {
+                amp->set_amp_power(amp_power);
+                _adc_table.clear();
+        }
 
         // upload new command sequence for this register
         std::vector<short> commands;
         amp->command_regset(commands, false);
         upload_auxcommand(AuxCmd3, (size_t)port, commands.begin(), commands.end());
         set_port_auxcommand(port, AuxCmd3, (size_t)port); // not really necessary
+
 }
 
 void
@@ -718,13 +739,16 @@ evalboard::ttl_in() const
 }
 
 void
-evalboard::dac_monitor(uint dac, miso_id stream, uint channel)
+evalboard::dac_monitor(uint dac, uint channel)
 {
         assert (dac < 8);
+        // infer stream and MISO channel from channel index
+        channel_info_t & chan = _adc_table[channel];
+
         assert (channel < 32);
         // [4:0] - channel; [8:5] - stream; 9 - enable
         okFrontPanel_SetWireInValue(_dev, int(WireInDacSource1) + dac,
-                                    0x0200 | ((int)stream << 5) | channel,
+                                    0x0200 | ((int)chan.stream << 5) | chan.channel,
                                     ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
 }
@@ -816,6 +840,8 @@ operator<< (std::ostream & o, evalboard::mosi_id port) {
 std::ostream &
 operator<< (std::ostream & o, evalboard::miso_id source) {
         switch(source) {
+        case evalboard::EvalADC:
+                return o << "EV";
         case evalboard::PortA1:
                 return o << "A1";
         case evalboard::PortB1:

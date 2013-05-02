@@ -3,7 +3,7 @@
 
 #include <cassert>
 #include <iosfwd>
-#include <map>
+#include <vector>
 #include <string>
 #include "daq_interface.hpp"
 
@@ -56,6 +56,7 @@ public:
         };
 
         enum miso_id {
+                EvalADC = -1,
                 PortA1 = 0,
                 PortA2 = 1,
                 PortB1 = 2,
@@ -64,6 +65,13 @@ public:
                 PortC2 = 5,
                 PortD1 = 6,
                 PortD2 = 7,
+        };
+
+        struct channel_info_t {
+                miso_id stream;
+                uint channel;
+                std::size_t byte_offset;
+                std::string name;
         };
 
         evalboard(std::size_t sampling_rate, char const * serial=0, char const * firmware=0);
@@ -80,12 +88,10 @@ public:
         std::size_t dac_nchannels() const { return naux_dacs; }
 
         /**
-         * Returns a table of ADC channels. For each element of the table (it),
-         * it.first is a name comprising the MISO port (or "EV" for the eval
-         * board ADCs) and the channel number, and it.second gives the offset
-         * into the frame buffer. Only enabled channels are included.
+         * Returns a vector of the defined ADC channels. Only enabled channels
+         * are included.
          */
-        std::map<std::size_t, std::string> adc_table() const;
+        std::vector<channel_info_t> const & adc_table() const;
 
         /**
          * @overload daq_interface::read()
@@ -146,10 +152,10 @@ public:
          * Set one of the DACs on the eval board to monitor an input channel.
          *
          * @param dac     the DAC to configure (values 0-8)
-         * @param stream  the stream to monitor
-         * @param channel the channel in the stream to monitor
+         * @param channel the channel to monitor (corresponding to the indices
+         *                from adc_table() - however, on-board ADCs can't be monitored
          */
-        void dac_monitor(uint dac, miso_id stream, uint channel);
+        void dac_monitor(uint dac, uint channel);
 
         /** disable a DAC */
         void dac_disable(uint dac);
@@ -193,6 +199,7 @@ private:
         void reset_board();
         void set_sampling_rate();
         void set_cable_delay(mosi_id port, uint delay);
+        void make_adc_table() const;
 
         okFrontPanel_HANDLE _dev;
         okPLL22393_HANDLE _pll;
@@ -204,6 +211,7 @@ private:
         ulong _board_version;
         ulong _enabled_streams;
         std::size_t _nactive_streams;
+        mutable std::vector<channel_info_t> _adc_table;
 };
 
 std::ostream & operator<< (std::ostream &, evalboard::auxcmd_slot);
