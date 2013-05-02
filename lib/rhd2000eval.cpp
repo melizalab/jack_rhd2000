@@ -741,24 +741,36 @@ evalboard::ttl_in() const
 void
 evalboard::dac_monitor(uint dac, uint channel)
 {
-        assert (dac < 8);
-        // infer stream and MISO channel from channel index
         channel_info_t & chan = _adc_table[channel];
-
-        assert (channel < 32);
+        assert (chan.stream != EvalADC);
+        assert (chan.channel < 32);
         // [4:0] - channel; [8:5] - stream; 9 - enable
-        okFrontPanel_SetWireInValue(_dev, int(WireInDacSource1) + dac,
-                                    0x0200 | ((int)chan.stream << 5) | chan.channel,
-                                    ulong_mask);
-        okFrontPanel_UpdateWireIns(_dev);
+        set_dac_source(dac, 0x0200 + ((int)chan.stream << 5) + chan.channel);
 }
 
 void
 evalboard::dac_disable(uint dac)
 {
+        set_dac_source(dac, 0x0000);
+}
+
+void
+evalboard::set_dac_source(uint dac, ulong arg)
+{
         assert (dac < 8);
-        okFrontPanel_SetWireInValue(_dev, int(WireInDacSource1) + dac, 0x0000, ulong_mask);
-        okFrontPanel_UpdateWireIns(_dev);
+        if (arg != _dac_sources[dac]) {
+#ifndef NDEBUG
+                if (arg & 0x0200)
+                        std::cerr << ((arg & 0x01e0) >> 5) << ':' << (arg & 0x001f) << " -> dac " << dac << std::endl;
+                else
+                        std::cerr << "dac " << dac << " disabled" << std::endl;
+#endif
+                okFrontPanel_SetWireInValue(_dev, int(WireInDacSource1) + dac,
+                                            arg,
+                                            ulong_mask);
+                okFrontPanel_UpdateWireIns(_dev);
+                _dac_sources[dac] = arg;
+        }
 }
 
 void

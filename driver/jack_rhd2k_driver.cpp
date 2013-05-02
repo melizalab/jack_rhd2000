@@ -257,12 +257,14 @@ rhd2k_driver_write (rhd2k_driver_t * driver, jack_nframes_t nframes)
         // the port list
         const size_t available_dacs = driver->dev->dac_nchannels();
         size_t dac = 0;
-        std::vector<evalboard::channel_info_t>::const_iterator chan = driver->dev->adc_table().begin();
         std::vector<jack_port_t*>::const_iterator port = driver->capture_ports.begin();
-	for (; port != driver->capture_ports.end() && dac < available_dacs; ++port, ++chan) {
+	for (size_t chan = 0; port != driver->capture_ports.end() && dac < available_dacs; ++port, ++chan) {
                 if (jack_port_monitoring_input(*port)) {
-                        // driver->dev->dac_monitor(dac++,
+                        driver->dev->dac_monitor(dac++, chan);
                 }
+        }
+        while (dac < available_dacs) {
+                driver->dev->dac_disable(dac++);
         }
         return 0;
 }
@@ -394,6 +396,7 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
 	driver->nt_run_cycle = (JackDriverNTRunCycleFunction) rhd2k_driver_run_cycle;
 	driver->null_cycle   = (JackDriverNullCycleFunction)  rhd2k_driver_null_cycle;
 	driver->read         = (JackDriverReadFunction)       rhd2k_driver_read;
+	driver->write        = (JackDriverWriteFunction)      rhd2k_driver_write;
 	driver->nt_bufsize   = (JackDriverNTBufSizeFunction)  rhd2k_driver_bufsize;
 
 	driver->client = client;

@@ -199,6 +199,7 @@ private:
         void reset_board();
         void set_sampling_rate();
         void set_cable_delay(mosi_id port, uint delay);
+        void set_dac_source(uint dac, ulong arg);
         void make_adc_table() const;
 
         okFrontPanel_HANDLE _dev;
@@ -212,6 +213,8 @@ private:
         ulong _enabled_streams;
         std::size_t _nactive_streams;
         mutable std::vector<channel_info_t> _adc_table;
+
+        ulong _dac_sources[naux_dacs];
 };
 
 std::ostream & operator<< (std::ostream &, evalboard::auxcmd_slot);
