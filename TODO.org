@@ -153,7 +153,7 @@ interface to the eval board, or just write a jack driver?  If a jack driver,
 jack1 or jack2?
 
 
-** base interface
+* base interface
 
 base interfaces should encapsulate a lot, in my opinion, so they can be general.
 a general daq interface should support starting and stopping, methods to query
@@ -170,7 +170,7 @@ a more general question is whether we should support dynamic reconfiguration of
 the object.  If the interface is intended only for JACK drivers, the
 configuration will always only happen once.
 
-** rhd2000 eval implementation
+* rhd2000 eval implementation
 
 a few tricky bits related to the aux command sequences.  setting the sampling
 rate requires regeneration of the command sequences, both for the impedance
@@ -179,7 +179,7 @@ checking DAC and some registers on the amplifier.
 I implemented this by setting sampling rate in the constructor for the eval
 board and the amps - no need to support changes to it in a jack-based system.
 
-** DONE data memory storage
+* DONE data memory storage
 
 data are copied out of the eval board's fifo in a fairly complex structure whose
 sizes depend on the number of enabled data streams
@@ -232,21 +232,21 @@ are disabled.  one option would be to generate a lookup table that maps channels
 to offset, which would be pretty fast to iterate through, and could be
 regenerated whenever the user changes stream or amplifier activation state.
 
-** TODO fix little-endian assumptions
+* TODO fix little-endian assumptions
 
 The returned data is little-endian, which works fine reading things directly
 into variables, but there should be some preprocessor macros for when the arch
 is big-endian.
 
-** TODO test different sampling rates
+* TODO test different sampling rates
 
-** TODO infer cable length
+* TODO infer cable length
 
-** DONE allow user to disable streams with active amps
+* DONE allow user to disable streams with active amps
 
-** DONE allow user to set per-amplifier filter and amp power values
+* DONE allow user to set per-amplifier filter and amp power values
 
-** DONE JACK driver parameters
+* DONE JACK driver parameters
 
 user needs to set
 
@@ -275,7 +275,7 @@ add to docs how to list usb devices
 os x : system_profiler SPUSBDataType
 linux: lsusb
 
-** DONE JACK driver skeleton
+* DONE JACK driver skeleton
 
 writing this jack driver is a bit of a pain. The server code is exported as a shared
 library, but the headers are not, so one either has to link into the jack
@@ -287,7 +287,7 @@ jack 2 to compile for OS X, either with waf or with xcode.
 
 we're unlikely to be using the software on macs, but maximum portability is good.
 
-** DONE optimize xrun detection and handling
+* DONE optimize xrun detection and handling
 
 it's a little confusing how run_cycle is supposed to work. It clearly needs to
 wait until there's enough data in the fifo to fill the port buffers. In my first
@@ -327,7 +327,7 @@ max read times of 52 ms.
 
 Threading the driver may help with reads, but not as much with polls.
 
-*** CANCELED add extra latency option
+** CANCELED add extra latency option
 
 user specifies extra latency on the command line. After starting acquisition,
 wait enough time for the fifo to fill that much. How to maintain that padding?
@@ -337,7 +337,7 @@ plus the padding before polling.  Quick test - fifo quickly empties, because the
 next cycle is initiated immediately after sufficient samples are acquired.
 The engine doesn't wait before initiating the next cycle.
 
-*** DONE check timestamp of returned data
+** DONE check timestamp of returned data
 
 this option takes advantage of the fact that the FPGA should behave
 deterministically, so if we simply wait the appropriate amount of time on the
@@ -350,16 +350,34 @@ precise.
 this appears to work really well! should probably monitor the FIFO every so
 often to update latency
 
-** TODO handle opal kelly errors?
+* TODO handle opal kelly errors?
 
 many of the okFrontPanel functions return error codes, which are not currently
 handled.  Likewise, the driver functions probably need to have try/catch blocks
 for calls into the rhd2000 interface.
 
-** TODO do impedance testing?
+* TODO do impedance testing?
 
-** TODO add latency callback
+* TODO add latency callback
 
 maybe poll fifo to estimate upper end?
 
-** TODO add hardware monitoring
+* TODO add hardware monitoring
+
+this is implemented a little hackily. basically we label the ports that support
+hardware monitoring with a port flag, and then do something in the
+driver->write() function to get the hardware to monitor the port. for the eval
+board this is somewhat complicated by the fact that there's only 8 available
+monitor ports, and each port can only monitor one channel. one option is simply
+to iterate through the ports and assign each one that's requested monitoring to
+the next available dac.
+
+ultimately the best option is probably to do the monitoring in software.
+
+* TODO use aux ADCs on RHD2000 more intelligently
+
+right now I'm not really using one of the aux command slots, and the second
+command slot is splitting its time between the ADCs and the temperature and
+supply voltage readings, so the effective sampling rate on these inputs is not
+the same as the amplifier. It might be nice to dedicate one of the aux command
+slots to sampling one of the ADCs at full sampling rate.

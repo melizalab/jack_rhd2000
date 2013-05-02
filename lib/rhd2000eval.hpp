@@ -35,6 +35,10 @@ public:
         static const std::size_t nmosi = 4;
         /// number of inputs (= number of MISO lines)
         static const std::size_t nmiso = 8;
+        /// number of auxiliary ADCs on the board
+        static const std::size_t naux_adcs = 8;
+        /// number of auxiliary DACs on the board
+        static const std::size_t naux_dacs = 8;
         /// all returned frames should start with this value
         static const uint64_t frame_header = 0xc691199927021942LL;
 
@@ -73,6 +77,7 @@ public:
         std::size_t frame_size() const;
         std::size_t sampling_rate() const { return _sampling_rate; }
         std::size_t adc_channels() const;
+        std::size_t dac_nchannels() const { return naux_dacs; }
 
         /**
          * Returns a table of ADC channels. For each element of the table (it),
@@ -137,8 +142,27 @@ public:
         void ttl_out(ulong value, ulong mask=0xffffffff);
         ulong ttl_in() const;
 
-        void dac_monitor_stream(int dac, int stream, int channel);
-        void enable_dac_monitor(int dac, bool enabled);
+        /**
+         * Set one of the DACs on the eval board to monitor an input channel.
+         *
+         * @param dac     the DAC to configure (values 0-8)
+         * @param stream  the stream to monitor
+         * @param channel the channel in the stream to monitor
+         */
+        void dac_monitor(uint dac, miso_id stream, uint channel);
+
+        /** disable a DAC */
+        void dac_disable(uint dac);
+
+        /**
+         * Configure the DACs.
+         *
+         * @param gain    set the gain of all the DACs to 2**gain (V/V; values 0-8)
+         * @param clip    set the noise clip for DACs 0 and 1. zeroes the LSBs
+         *                of the signals (values 0-127, corresponding to 0-396 uV)
+         */
+        void dac_configure(uint gain, uint clip=0);
+
 
         friend std::ostream & operator<< (std::ostream &, evalboard const &);
 

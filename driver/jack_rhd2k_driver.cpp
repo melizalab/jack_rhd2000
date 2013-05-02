@@ -126,14 +126,19 @@ rhd2k_driver_attach (rhd2k_driver_t *driver)
 #endif
 
         // create ports
-	const int port_flags = JackPortIsOutput|JackPortIsPhysical|JackPortIsTerminal;
         std::map<size_t, string> channels = driver->dev->adc_table();
         std::map<size_t, string>::const_iterator it;
         for (it = channels.begin(); it != channels.end(); ++it) {
+                int port_flags = JackPortIsOutput|JackPortIsPhysical|JackPortIsTerminal;
                 char const * name = it->second.c_str();
                 size_t idx;
                 // filter eval board ADC channels
-                if ((sscanf(name,"EV_%zd", &idx) > 0 && !(driver->eval_adc_enabled & 1 << idx))) continue;
+                if (sscanf(name,"EV_%zd", &idx) > 0) {
+                        if (!(driver->eval_adc_enabled & 1 << idx)) continue;
+                }
+                else {
+                        port_flags |= JackPortCanMonitor;
+                }
 #ifndef NDEBUG
                 jack_info("Registering capture port %s (offset = %zd)", name, it->first);
 #endif
@@ -218,6 +223,9 @@ static int
 rhd2k_driver_read (rhd2k_driver_t * driver, jack_nframes_t nframes)
 {
         evalboard::data_type * p;
+        if (driver->engine->freewheeling) {
+                return 0;
+        }
 
         // the port list
         std::map<size_t, jack_port_t*>::const_iterator it;
@@ -237,6 +245,26 @@ rhd2k_driver_read (rhd2k_driver_t * driver, jack_nframes_t nframes)
                 else {
                         // silence the port buffer
                         memset(buf, 0, nframes * sizeof(jack_default_audio_sample_t));
+                }
+        }
+        return 0;
+}
+
+/* this function sets up hardware monitoring. no data is actually copied */
+static int
+rhd2k_driver_write (rhd2k_driver_t * driver, jack_nframes_t nframes)
+{
+        if (driver->engine->freewheeling) {
+                return 0;
+        }
+
+        // the port list
+        const size_t available_dacs = driver->dev->dac_nchannels();
+        size_t dac = 0;
+        std::map<size_t, jack_port_t*>::const_iterator it;
+	for (it = driver->capture_ports.begin(); it != driver->capture_ports.end() && dac < available_dacs; ++it) {
+                if (jack_port_monitoring_input(it->second)) {
+                        // driver->dev->dac_monitor(dac++,
                 }
         }
         return 0;

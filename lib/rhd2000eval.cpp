@@ -15,7 +15,6 @@ static const float FEET_PER_METERS = 0.3048;
 static const ulong RHYTHM_BOARD_ID = 500L;
 static const size_t FIFO_CAPACITY_WORDS = 67108864;
 static const ulong ulong_mask = 0xffffffff;
-static const size_t EVAL_NADCS = 8; // number of adcs on the eval board
 
 enum RhythmEndPoints {
         WireInResetRun = 0x00,
@@ -305,7 +304,7 @@ evalboard::adc_table() const
                 active_stream += 1;
         }
         // eval board adcs
-        for (size_t i = 0; i < EVAL_NADCS; ++i) {
+        for (size_t i = 0; i < naux_adcs; ++i) {
                 std::ostringstream name;
                 name << "EV_" << i;
                 offset = sizeof(data_type) * (base_offset + (36 * streams_enabled()) + i);
@@ -718,12 +717,35 @@ evalboard::ttl_in() const
         return okFrontPanel_GetWireOutValue(_dev, WireOutTtlIn);
 }
 
-// rhd2k::rhd2000 const *
-// evalboard::miso(miso_id m) const
-// {
-//         assert ((size_t)m < nmiso);
-//         return _miso[(size_t)m];
-// }
+void
+evalboard::dac_monitor(uint dac, miso_id stream, uint channel)
+{
+        assert (dac < 8);
+        assert (channel < 32);
+        // [4:0] - channel; [8:5] - stream; 9 - enable
+        okFrontPanel_SetWireInValue(_dev, int(WireInDacSource1) + dac,
+                                    0x0200 | ((int)stream << 5) | channel,
+                                    ulong_mask);
+        okFrontPanel_UpdateWireIns(_dev);
+}
+
+void
+evalboard::dac_disable(uint dac)
+{
+        assert (dac < 8);
+        okFrontPanel_SetWireInValue(_dev, int(WireInDacSource1) + dac, 0x0000, ulong_mask);
+        okFrontPanel_UpdateWireIns(_dev);
+}
+
+void
+evalboard::dac_configure(uint gain, uint clip)
+{
+        assert (gain < 8);
+        assert (clip < 128);
+        okFrontPanel_SetWireInValue(_dev, WireInResetRun, gain << 13, 0xe000);
+        okFrontPanel_SetWireInValue(_dev, WireInResetRun, clip << 6,  0x1fc0);
+        okFrontPanel_UpdateWireIns(_dev);
+}
 
 namespace rhd2k {
 
