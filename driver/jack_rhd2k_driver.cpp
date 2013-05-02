@@ -34,7 +34,7 @@ struct rhd2k_driver_t {
         uint32_t last_frame;    // the timestamp in the RHD data stream
 
 	jack_nframes_t  period_size;
-        jack_time_t     fifo_usecs; // extra fifo buffering, in usecs
+        jack_nframes_t  fifo_latency; // extra fifo buffering, in frames
 
 	jack_client_t  * client;
         std::vector<jack_port_t*> capture_ports;
@@ -86,10 +86,10 @@ parse_port_config(char pchar, char const * arg, rhd2k_jack_settings_t & s)
                 port = evalboard::PortB;
                 break;
         case 'C':
-                port = evalboard::PortB;
+                port = evalboard::PortC;
                 break;
         case 'D':
-                port = evalboard::PortB;
+                port = evalboard::PortD;
                 break;
         default:
                 return;
@@ -99,6 +99,24 @@ parse_port_config(char pchar, char const * arg, rhd2k_jack_settings_t & s)
         sscanf(arg, "%li,%lf,%lf,%lf,%lf", &pptr->amp_power, &pptr->lowpass,
                &pptr->highpass, &pptr->dsp, &pptr->cable_m);
 }
+
+static void
+rhd2k_latency_callback (jack_latency_callback_mode_t mode, void* arg)
+{
+        rhd2k_driver_t* driver = (rhd2k_driver_t*) arg;
+        jack_latency_range_t range;
+
+        // TODO get upper range of latency by polling FIFO at times
+        if (mode == JackCaptureLatency) {
+                range.min = range.max = driver->period_size + driver->fifo_latency;
+        }
+
+        std::vector<jack_port_t*>::const_iterator it;
+	for (it = driver->capture_ports.begin(); it != driver->capture_ports.end(); ++it) {
+                jack_port_set_latency_range (*it, mode, &range);
+	}
+}
+
 
 static int
 rhd2k_driver_attach (rhd2k_driver_t *driver)
@@ -193,7 +211,7 @@ rhd2k_driver_start (rhd2k_driver_t *driver)
                 return -1;
         }
         // add any additional latency to the fifo
-        usleep(driver->fifo_usecs);
+        usleep(driver->fifo_latency * 1e6 / driver->dev->sampling_rate());
         driver->last_wait_ust = driver->engine->get_microseconds();
         driver->last_frame = 0U;
         return 0;
@@ -405,6 +423,8 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
         driver->eval_adc_enabled = settings.eval_adc_enabled;
 	driver->last_wait_ust = 0;
 
+        jack_set_latency_callback (client, rhd2k_latency_callback, driver);
+
         try {
                 driver->dev = new evalboard(settings.sample_rate, serial, firmware);
                 // configure ports
@@ -428,14 +448,13 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
 
                 driver->period_usecs =
                         (jack_time_t) floor ((((float) driver->period_size) * 1000000.0f) / driver->dev->sampling_rate());
-                driver->fifo_usecs =
-                        (jack_time_t) floor ((((float) settings.capture_frame_latency) * 1000000.0f) / driver->dev->sampling_rate());
+                driver->fifo_latency = settings.capture_frame_latency;
 
                 std::cout << *driver->dev
                           << "\nperiod = " << driver->period_size
                           << " frames (" << (driver->period_usecs / 1000.0f) << " ms)"
                           << "\nFIFO buffering = " << settings.capture_frame_latency
-                          << " frames (" << (driver->fifo_usecs / 1000.0f) << " ms)" << std::endl;
+                          << " frames (" << (driver->fifo_latency * 1e3f / driver->dev->sampling_rate()) << " ms)" << std::endl;
                 return driver;
         }
         catch (std::runtime_error const & e) {

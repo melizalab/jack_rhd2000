@@ -99,7 +99,8 @@ public:
          * @return the number of frames read, or 0 if there was an error. If the
          * RHD2000eval FIFO contains less than the requested number of samples,
          * the last sample in the buffer will be repeated, so it's important to
-         * check whether enough frames are ready
+         * check whether enough frames are ready, or else check the returned
+         * buffer for validity.
          */
         std::size_t read(void *, std::size_t);
 

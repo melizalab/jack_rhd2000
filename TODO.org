@@ -350,19 +350,30 @@ precise.
 this appears to work really well! should probably monitor the FIFO every so
 often to update latency
 
-* TODO handle opal kelly errors?
+* DONE handle opal kelly errors?
 
 many of the okFrontPanel functions return error codes, which are not currently
 handled.  Likewise, the driver functions probably need to have try/catch blocks
 for calls into the rhd2000 interface.
 
-* TODO do impedance testing?
+okay - the only public methods that throw errors in evalboard are the
+constructor, scan_ports(), set_sampling_rate(), and configure_port().  The latter two only
+throw errors if they're called when the interface is running, so these are
+really logic errors.  anyway, all these are called in a try block in the driver
+initialization function, so there shouldn't be any uncaught exceptions.
 
-* TODO add latency callback
+most of the other okFrontPanel calls don't return useful error codes, so they
+can be ignored
+
+* DEFERRED do impedance testing?
+  - State "DEFERRED"   from "TODO"       [2013-05-02 Thu 16:46] \\
+    for now, use intan's interface
+
+* DONE add latency callback
 
 maybe poll fifo to estimate upper end?
 
-* TODO add hardware monitoring
+* DONE add hardware monitoring
 
 this is implemented a little hackily. basically we label the ports that support
 hardware monitoring with a port flag, and then do something in the
@@ -381,3 +392,5 @@ command slot is splitting its time between the ADCs and the temperature and
 supply voltage readings, so the effective sampling rate on these inputs is not
 the same as the amplifier. It might be nice to dedicate one of the aux command
 slots to sampling one of the ADCs at full sampling rate.
+
+* TODO document evalboard class
