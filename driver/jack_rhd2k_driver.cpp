@@ -371,7 +371,6 @@ rhd2k_driver_bufsize (rhd2k_driver_t* driver, jack_nframes_t nframes)
 #ifndef NDEBUG
         jack_info("RHD2K: resizing buffer to %ld", nframes);
 #endif
-        rhd2k_driver_stop(driver);
 
         // update variables
 	driver->period_size = nframes;
@@ -389,8 +388,6 @@ rhd2k_driver_bufsize (rhd2k_driver_t* driver, jack_nframes_t nframes)
                 jack_error ("RHD2K: unable to allocate buffer");
                 return -1;
         }
-
-        rhd2k_driver_start(driver);
 
         return 0;
 }

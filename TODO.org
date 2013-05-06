@@ -238,7 +238,7 @@ The returned data is little-endian, which works fine reading things directly
 into variables, but there should be some preprocessor macros for when the arch
 is big-endian.
 
-* TODO test different sampling rates
+* DONE test different sampling rates
 
 * DONE infer cable length
 
@@ -401,3 +401,6 @@ slots to sampling one of the ADCs at full sampling rate.
 
 * TODO document evalboard class
 * TODO better error messages for bad filtering values
+* DONE fix buffer size callback
+
+didn't need to start and stop acquisition
