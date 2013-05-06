@@ -240,7 +240,9 @@ is big-endian.
 
 * TODO test different sampling rates
 
-* TODO infer cable length
+* DONE infer cable length
+
+user can still set cable length manually
 
 * DONE allow user to disable streams with active amps
 
@@ -371,7 +373,7 @@ can be ignored
 
 * DONE add latency callback
 
-* TODO maybe poll fifo to estimate upper end of latency
+* TODO [#C] maybe poll fifo to estimate upper end of latency
 
 this is a bit tricky because we don't want to introduce an xrun by testing
 latency! And there will be some uncertainty about the returned value, because of
@@ -398,3 +400,4 @@ the same as the amplifier. It might be nice to dedicate one of the aux command
 slots to sampling one of the ADCs at full sampling rate.
 
 * TODO document evalboard class
+* TODO better error messages for bad filtering values

@@ -844,10 +844,12 @@ operator<< (std::ostream & o, evalboard const & r)
                 o << "\n" << miso << ": "
                   <<  *(r._miso[i]);
                 if (!r.stream_enabled(miso)) o << " (off) ";
+#ifndef NDEBUG
                 else {
-                        sprintf(buf1, " (delay %d)", r.cable_meters_to_delay(r._cable_lengths[i]));
+                        sprintf(buf1, " (cable %.2f m)", r._cable_lengths[i]);
                         o << buf1;
                 }
+#endif
         }
         return o;
 }

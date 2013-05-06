@@ -62,7 +62,7 @@ struct rhd2k_jack_settings_t {
 
 static char const * default_firmware = "rhythm_130302.bit";
 
-static const rhd2k_amp_settings_t default_amp_config = {0xffffffff, 100, 3000, 1, 0.914};
+static const rhd2k_amp_settings_t default_amp_config = {0xffffffff, 100, 3000, 1, 0};
 static const rhd2k_jack_settings_t default_settings = {1024U, 30000U, 0U,
                                                        {default_amp_config,
                                                         default_amp_config,
@@ -155,7 +155,7 @@ rhd2k_driver_attach (rhd2k_driver_t *driver)
                         port_flags |= JackPortCanMonitor;
                 }
 #ifndef NDEBUG
-                jack_info("Registering capture port %s (offset = %zd)", name, it->byte_offset);
+                jack_info("RHD2K: registering capture port %s (offset = %zd)", name, it->byte_offset);
 #endif
                 if ((port = jack_port_register (driver->client, name,
                                                 JACK_DEFAULT_AUDIO_TYPE,
@@ -183,7 +183,7 @@ rhd2k_driver_detach (rhd2k_driver_t *driver)
         std::vector<jack_port_t*>::const_iterator it;
 	for (it = driver->capture_ports.begin(); it != driver->capture_ports.end(); ++it) {
 #ifndef NDEBUG
-                jack_info("Unregistering capture port %s", jack_port_name(*it));
+                jack_info("RHD2K: unregistering capture port %s", jack_port_name(*it));
 #endif
                 jack_port_unregister (driver->client, *it);
 	}
@@ -430,10 +430,10 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
                 // configure ports
                 for (size_t i = 0; i < evalboard::nmosi; ++i) {
                         rhd2k_amp_settings_t * a = &settings.amplifiers[i];
-                        driver->dev->set_cable_meters((evalboard::mosi_id)i, a->cable_m);
                         driver->dev->configure_port((evalboard::mosi_id)i, a->lowpass, a->highpass, a->dsp, a->amp_power);
                 }
                 // scan ports
+                jack_info("RHD2K: scanning SPI ports");
                 driver->dev->scan_ports();
                 // disable streams where the user sets power off to all amps -
                 // note that it's not possible to only enable one MISO line on a
@@ -443,6 +443,10 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
                         if (a->amp_power == 0x0) {
                                 driver->dev->enable_stream(evalboard::miso_id(i*2), false);
                                 driver->dev->enable_stream(evalboard::miso_id(i*2+1), false);
+                        }
+                        // manually specified cable length
+                        if (a->cable_m > 0) {
+                                driver->dev->set_cable_meters((evalboard::mosi_id)i, a->cable_m);
                         }
                 }
 
@@ -527,7 +531,7 @@ driver_get_descriptor ()
                 param->character = 'A' + p;
                 sprintf(param->name, "port-%c", param->character);
                 param->type = JackDriverParamString;
-                strcpy(param->value.str,  "0xffffffff,100,3000,1,0.914");
+                strcpy(param->value.str,  "0xffffffff,100,3000,1,0");
                 sprintf(param->short_desc, "configure port %c", param->character);
                 sprintf(param->long_desc,
                         "configure port %c: channels[,lopass[,hipass[,dsp-hipass[,cable-meters]]]]",
