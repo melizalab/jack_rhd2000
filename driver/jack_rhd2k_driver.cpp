@@ -441,8 +441,8 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
                 for (size_t i = 0; i < evalboard::nmosi; ++i) {
                         rhd2k_amp_settings_t * a = &settings.amplifiers[i];
                         if (a->amp_power == 0x0) {
-                                driver->dev->enable_stream(i*2, false);
-                                driver->dev->enable_stream(i*2+1, false);
+                                driver->dev->enable_stream(evalboard::miso_id(i*2), false);
+                                driver->dev->enable_stream(evalboard::miso_id(i*2+1), false);
                         }
                 }
 

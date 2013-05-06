@@ -371,7 +371,11 @@ can be ignored
 
 * DONE add latency callback
 
-maybe poll fifo to estimate upper end?
+* TODO maybe poll fifo to estimate upper end of latency
+
+this is a bit tricky because we don't want to introduce an xrun by testing
+latency! And there will be some uncertainty about the returned value, because of
+the delay involved in the roundtrip wireout query.
 
 * DONE add hardware monitoring
 

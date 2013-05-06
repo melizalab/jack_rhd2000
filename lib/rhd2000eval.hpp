@@ -7,6 +7,7 @@
 #include <string>
 #include "daq_interface.hpp"
 
+#define FEET_PER_METERS 0.3048f
 
 typedef void* okFrontPanel_HANDLE;
 typedef void* okPLL22393_HANDLE;
@@ -84,14 +85,14 @@ public:
         std::size_t nframes() const;
         std::size_t frame_size() const;
         std::size_t sampling_rate() const { return _sampling_rate; }
-        std::size_t adc_channels() const;
+        std::size_t adc_channels() const { return _adc_table.size(); }
         std::size_t dac_nchannels() const { return naux_dacs; }
 
         /**
          * Returns a vector of the defined ADC channels. Only enabled channels
          * are included.
          */
-        std::vector<channel_info_t> const & adc_table() const;
+        std::vector<channel_info_t> const & adc_table() const { return _adc_table; }
 
         /**
          * @overload daq_interface::read()
@@ -108,9 +109,6 @@ public:
 
         /** set the cable length in meters for a port */
         void set_cable_meters(mosi_id port, double meters);
-
-        /** set the cable length in feet for a port */
-        void set_cable_feet(mosi_id port, double feet);
 
         /**
          * Configure the RHD2000 chips on a port. This command will only take
@@ -141,9 +139,9 @@ public:
         /** the number of streams that have been enabled */
         std::size_t streams_enabled() const;
         /** true if a stream is enabled */
-        bool stream_enabled(std::size_t stream) const;
+        bool stream_enabled(miso_id stream) const;
         /** enable or disable a stream for data collection */
-        void enable_stream(std::size_t stream, bool enabled);
+        void enable_stream(miso_id stream, bool enabled);
 
         void set_leds(ulong value, ulong mask=0xffffffff);
         void ttl_out(ulong value, ulong mask=0xffffffff);
@@ -185,12 +183,19 @@ protected:
         }
         void set_auxcommand_length(auxcmd_slot slot, ulong length, ulong loop=0);
         void set_port_auxcommand(mosi_id port, auxcmd_slot slot, ulong bank);
+        void set_cmd_ram(auxcmd_slot slot, ulong bank, ulong index, ulong command);
 
         bool dcm_done() const;
         bool clock_locked() const;
-        void set_cmd_ram(auxcmd_slot slot, ulong bank, ulong index, ulong command);
         ulong words_in_fifo() const;
+        /**
+         * Enable/disable streams using a bitmask. In constrast to
+         * enable_stream, this does not regenerate the adc table.
+         */
         void enable_streams(ulong);
+        void set_cable_delay(mosi_id port, uint delay);
+        void set_dac_source(uint dac, ulong arg);
+        void update_adc_table();
 
 private:
         /* object is non-copyable */
@@ -198,22 +203,23 @@ private:
         evalboard& operator=(evalboard const &);
 
         void reset_board();
-        void set_sampling_rate();
-        void set_cable_delay(mosi_id port, uint delay);
-        void set_dac_source(uint dac, ulong arg);
-        void make_adc_table() const;
+        void set_sampling_rate(uint rate);
+        /// convert cable length (m) to FPGA delay (ticks) for current sampling rate
+        uint cable_meters_to_delay(double) const;
+        /// convert FPGA delay to cable length (m) for current sampling rate
+        double cable_delay_to_meters(uint) const;
 
         okFrontPanel_HANDLE _dev;
         okPLL22393_HANDLE _pll;
         rhd2000 * _mosi[nmosi];
         rhd2000 * _miso[nmiso];
-        double _cable_lengths[nmosi];
+        std::vector<double> _cable_lengths;
 
         uint _sampling_rate;
         ulong _board_version;
         ulong _enabled_streams;
         std::size_t _nactive_streams;
-        mutable std::vector<channel_info_t> _adc_table;
+        std::vector<channel_info_t> _adc_table;
 
         ulong _dac_sources[naux_dacs];
 };

@@ -66,9 +66,9 @@ static const double Pi = 2*acos(0.0);
 // Returns the value of the RH1 resistor (in ohms) corresponding to a particular upper
 // bandwidth value (in Hz).
 static double
-rH1FromUpperBandwidth(double upperBandwidth)
+rH1_from_upper_bandwidth(double upper_bandwidth)
 {
-    double log10f = log10(upperBandwidth);
+    double log10f = log10(upper_bandwidth);
 
     return 0.9730 * pow(10.0, (8.0968 - 1.1892 * log10f + 0.04767 * log10f * log10f));
 }
@@ -76,9 +76,9 @@ rH1FromUpperBandwidth(double upperBandwidth)
 // Returns the value of the RH2 resistor (in ohms) corresponding to a particular upper
 // bandwidth value (in Hz).
 static double
-rH2FromUpperBandwidth(double upperBandwidth)
+rH2_from_upper_bandwidth(double upper_bandwidth)
 {
-    double log10f = log10(upperBandwidth);
+    double log10f = log10(upper_bandwidth);
 
     return 1.0191 * pow(10.0, (8.1009 - 1.0821 * log10f + 0.03383 * log10f * log10f));
 }
@@ -86,11 +86,11 @@ rH2FromUpperBandwidth(double upperBandwidth)
 // Returns the value of the RL resistor (in ohms) corresponding to a particular lower
 // bandwidth value (in Hz).
 static double
-rLFromLowerBandwidth(double lowerBandwidth)
+rL_from_lower_bandwidth(double lower_bandwidth)
 {
-    double log10f = log10(lowerBandwidth);
+    double log10f = log10(lower_bandwidth);
 
-    if (lowerBandwidth < 4.0) {
+    if (lower_bandwidth < 4.0) {
         return 1.0061 * pow(10.0, (4.9391 - 1.2088 * log10f + 0.5698 * log10f * log10f +
                                    0.1442 * log10f * log10f * log10f));
     } else {
@@ -101,7 +101,7 @@ rLFromLowerBandwidth(double lowerBandwidth)
 // Returns the amplifier upper bandwidth (in Hz) corresponding to a particular value
 // of the resistor RH1 (in ohms).
 static double
-upperBandwidthFromRH1(double rH1)
+upper_bandwidth_from_RH1(double rH1)
 {
     double a, b, c;
 
@@ -115,7 +115,7 @@ upperBandwidthFromRH1(double rH1)
 // Returns the amplifier upper bandwidth (in Hz) corresponding to a particular value
 // of the resistor RH2 (in ohms).
 static double
-upperBandwidthFromRH2(double rH2)
+upper_bandwidth_from_RH2(double rH2)
 {
     double a, b, c;
 
@@ -129,11 +129,11 @@ upperBandwidthFromRH2(double rH2)
 // Returns the amplifier lower bandwidth (in Hz) corresponding to a particular value
 // of the resistor RL (in ohms).
 static double
-lowerBandwidthFromRL(double rL)
+lower_bandwidth_from_RL(double rL)
 {
     double a, b, c;
 
-    // Quadratic fit below is invalid for values of RL less than 5.1 kOhm
+    // Quadratic fit below is invalid for values of RL less than 5.1 k_ohm
     if (rL < 5100.0) {
         rL = 5100.0;
     }
@@ -171,7 +171,7 @@ rhd2000::upper_bandwidth() const {
 
         double rh1 = RH1Base + RH1Dac1Unit * rh1dac1 + RH1Dac2Unit * rh1dac2;
         double rh2 = RH2Base + RH2Dac1Unit * rh2dac1 + RH2Dac2Unit * rh2dac2;
-        return sqrt(upperBandwidthFromRH1(rh1) * upperBandwidthFromRH2(rh2));
+        return sqrt(upper_bandwidth_from_RH1(rh1) * upper_bandwidth_from_RH2(rh2));
 }
 
 void
@@ -183,12 +183,12 @@ rhd2000::set_upper_bandwidth(double hz)
         if (hz > 30000.0) hz = 30000.0;
 
 
-        rh1target = rH1FromUpperBandwidth(hz);
+        rh1target = rH1_from_upper_bandwidth(hz);
         rh1dac2 = floor((rh1target - RH1Base) / RH1Dac2Unit);
         rh1dac1 = round((rh1target - RH1Base - rh1dac2 * RH1Dac2Unit) / RH1Dac1Unit);
         assert(rh1dac1 >= 0 && rh1dac2 >= 0 && rh1dac1 <= RH1_DAC1M && rh1dac2 <= RH1_DAC2M);
 
-        rh2target = rH2FromUpperBandwidth(hz);
+        rh2target = rH2_from_upper_bandwidth(hz);
         rh2dac2 = floor((rh2target - RH2Base) / RH2Dac2Unit);
         rh2dac1 = round((rh2target - RH2Base - rh2dac2 * RH2Dac2Unit) / RH2Dac1Unit);
         assert(rh2dac1 >= 0 && rh2dac2 >= 0 && rh2dac1 <= RH2_DAC1M && rh2dac2 <= RH2_DAC2M);
@@ -200,8 +200,8 @@ rhd2000::set_upper_bandwidth(double hz)
 
 #ifndef NDEBUG
         // test bit math
-        double expect1 = upperBandwidthFromRH1(RH1Base + RH1Dac1Unit * rh1dac1 + RH1Dac2Unit * rh1dac2);
-        double expect2 = upperBandwidthFromRH2(RH2Base + RH2Dac1Unit * rh2dac1 + RH2Dac2Unit * rh2dac2);
+        double expect1 = upper_bandwidth_from_RH1(RH1Base + RH1Dac1Unit * rh1dac1 + RH1Dac2Unit * rh1dac2);
+        double expect2 = upper_bandwidth_from_RH2(RH2Base + RH2Dac1Unit * rh2dac1 + RH2Dac2Unit * rh2dac2);
         assert(upper_bandwidth() == sqrt(expect1 * expect2));
 #endif
 
@@ -214,7 +214,7 @@ rhd2000::lower_bandwidth() const
         int rldac2 = _registers[RL_DAC2R] & RL_DAC2M;
         int rldac3 = (_registers[RL_DAC3R] & RL_DAC3M) > 0;
         double rl = RLBase + RLDac1Unit * rldac1 + RLDac2Unit * rldac2 + RLDac3Unit * rldac3;
-        return lowerBandwidthFromRL(rl);
+        return lower_bandwidth_from_RL(rl);
 }
 
 void
@@ -226,7 +226,7 @@ rhd2000::set_lower_bandwidth(double hz)
         // restrict range to published specs (upper=500 in the doc, but 1500 in code)
         if (hz < 0.1) hz = 0.1;
         else if (hz > 1500.0) hz = 1500.0;
-        target = rLFromLowerBandwidth(hz);
+        target = rL_from_lower_bandwidth(hz);
         dac3 = (hz < 0.15);
         dac2 = floor((target - RLBase - dac3 * RLDac3Unit) / RLDac2Unit);
         dac1 = round((target - RLBase - dac3 * RLDac3Unit - dac2 * RLDac2Unit) / RLDac1Unit);
@@ -238,7 +238,9 @@ rhd2000::set_lower_bandwidth(double hz)
 
 #ifndef NDEBUG
         // test bit math
-        double expected = lowerBandwidthFromRL(RLBase + RLDac1Unit * dac1 + RLDac2Unit * dac2 + RLDac3Unit * dac3);
+        double expected = lower_bandwidth_from_RL(RLBase + RLDac1Unit * dac1 +
+                                                  RLDac2Unit * dac2 +
+                                                  RLDac3Unit * dac3);
         assert(lower_bandwidth() == expected);
 #endif
 }
@@ -337,39 +339,39 @@ rhd2000::chip_id() const
 void
 rhd2000::set_sampling_rate_registers()
 {
-        int muxBias, adcBufferBias;
+        int mux_bias, adc_buffer_bias;
 
         if (_sampling_rate < 3334) {
-                muxBias = 40;
-                adcBufferBias = 32;
+                mux_bias = 40;
+                adc_buffer_bias = 32;
         } else if (_sampling_rate < 4001) {
-                muxBias = 40;
-                adcBufferBias = 16;
+                mux_bias = 40;
+                adc_buffer_bias = 16;
         } else if (_sampling_rate < 5001) {
-                muxBias = 40;
-                adcBufferBias = 8;
+                mux_bias = 40;
+                adc_buffer_bias = 8;
         } else if (_sampling_rate < 6251) {
-                muxBias = 32;
-                adcBufferBias = 8;
+                mux_bias = 32;
+                adc_buffer_bias = 8;
         } else if (_sampling_rate < 8001) {
-                muxBias = 26;
-                adcBufferBias = 8;
+                mux_bias = 26;
+                adc_buffer_bias = 8;
         } else if (_sampling_rate < 10001) {
-                muxBias = 18;
-                adcBufferBias = 4;
+                mux_bias = 18;
+                adc_buffer_bias = 4;
         } else if (_sampling_rate < 12501) {
-                muxBias = 16;
-                adcBufferBias = 3;
+                mux_bias = 16;
+                adc_buffer_bias = 3;
         } else if (_sampling_rate < 15001) {
-                muxBias = 7;
-                adcBufferBias = 3;
+                mux_bias = 7;
+                adc_buffer_bias = 3;
         } else {
-                muxBias = 4;
-                adcBufferBias = 2;
+                mux_bias = 4;
+                adc_buffer_bias = 2;
         }
 
-        _registers[1] = (adcBufferBias & 0x3f) | (_registers[1] & 0xe0);
-        _registers[2] = muxBias;
+        _registers[1] = (adc_buffer_bias & 0x3f) | (_registers[1] & 0xe0);
+        _registers[2] = mux_bias;
 }
 
 void
