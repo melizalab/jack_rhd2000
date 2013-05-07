@@ -4,5 +4,6 @@
 *.os
 *.so
 /attic
-/test/test_driver
+/jack
 /test/test_rhd2k
+/test/test_rhd2000eval

@@ -13,7 +13,7 @@ AddOption('--jack',
           nargs=1,
           action='store',
           metavar='DIR',
-          default='#jack1',
+          default='#jack',
           help='JACK 1 source directory')
 
 # need to figure this out for different os
@@ -23,7 +23,7 @@ jack_include_dirs = [os.path.join(jack_base, f) for f in ("","include","config")
 
 menv = env.Clone()
 menv.Append(
-    CXXFLAGS=["-DSERVER_SIDE"],
+    CXXFLAGS=["-DSERVER_SIDE","-fpermissive"],
     CPPPATH=['#lib'] + jack_include_dirs,
     LIBS=['m','stdc++','jackserver'],
 )

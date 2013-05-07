@@ -41,7 +41,7 @@ public:
         /// number of auxiliary DACs on the board
         static const std::size_t naux_dacs = 8;
         /// all returned frames should start with this value
-        static const uint64_t frame_header = 0xc691199927021942LL;
+        static const unsigned long long frame_header = 0xc691199927021942ULL;
 
         enum mosi_id {
                 PortA = 0,

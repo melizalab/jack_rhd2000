@@ -1,10 +1,14 @@
+
+#include <unistd.h>
+#include <stdint.h>
+#include <cmath>
 #include <cstdio>
-#include <math.h>
 #include <iostream>
 #include <sstream>
 #include <bitset>
 #include "rhd2000eval.hpp"
 #include "rhd2k.hpp"
+
 #include "okFrontPanelDLL.h"
 
 using std::size_t;
@@ -196,7 +200,7 @@ bool
 evalboard::running() const
 {
         okFrontPanel_UpdateWireOuts(_dev);
-        return (okFrontPanel_GetWireOutValue(_dev, WireOutSpiRunning) & 0x01 == 1);
+        return (okFrontPanel_GetWireOutValue(_dev, WireOutSpiRunning) & 0x01);
 }
 
 

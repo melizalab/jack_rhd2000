@@ -1,6 +1,6 @@
 import os
 Import('env')
 
-lib = [env.SharedObject(f) for f in env.Glob("*.cpp")]
+lib = [env.SharedObject(f) for f in (env.Glob("*.cpp") + env.Glob("*.c"))]
 env.Alias('lib',lib)
 

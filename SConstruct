@@ -1,4 +1,5 @@
 import os
+from subprocess import Popen, PIPE
 
 if hasattr(os,'uname'):
     system = os.uname()[0]
@@ -28,7 +29,11 @@ if system == 'Darwin':
     env.Append(CXXFLAGS=["-mmacosx-version-min=10.4"],
                CPPPATH=['/opt/local/include'],
                LIBPATH=['/opt/local/lib'])
-
+elif system == 'Linux':
+    env.Append(LIBS=['dl'])
+    # debian wheezy multiarch
+    p = Popen("dpkg-architecture -qDEB_HOST_MULTIARCH", stdout=PIPE, stderr=PIPE, shell=True).stdout
+    if p is not None: env.Append(LIBPATH=os.path.join('/usr/lib/',p.read().strip()))
 
 SConscript('lib/SConscript', exports='env')
 SConscript('driver/SConscript', exports='env')

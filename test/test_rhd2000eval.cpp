@@ -22,30 +22,6 @@ stats(std::ostream & o, double psum, double p2sum, double pmax, size_t n)
         o << "mean: " << psum << ", stdev: " << sqrt(p2sum - psum * psum) << ", max: " << pmax << endl;
 }
 
-
-// void
-// test_buffer_poll()
-// {
-//
-
-//         cout << "Testing poll rate: " << endl;
-//         // test rate of wire out queries
-//         const size_t reps = 10000;
-//         long max = 0;
-//         for (size_t i = 0; i < reps; ++i) {
-//                 ptime start(microsec_clock::universal_time());
-//                 size_t n = dev->nframes();
-//                 ptime stop(microsec_clock::universal_time());
-//                 long us = (stop - start).total_microseconds();
-//                 max = std::max(us,max);
-//                 e += us;
-//                 e2 += us * us;
-//         }
-//         double mean = e / reps;
-//         std::cout << "average wait: " << mean << "; stdev: " << sqrt(e2 / reps - mean * mean)
-//                   << "; max: " << max << std::endl;
-// }
-
 int
 main(int, char**)
 {

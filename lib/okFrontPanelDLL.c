@@ -1,13 +1,13 @@
 //------------------------------------------------------------------------
 // okFrontPanelDLL.c/cpp
 //
-// This is the import source for the FrontPanel API DLL.  If you are 
+// This is the import source for the FrontPanel API DLL.  If you are
 // building an application using the DLL, this source should be included
 // within your C++/C project.  It includes methods that will
 // automatically load the DLL and map function calls to the DLL entry
 // points.
 //
-// This library is not necessary when you call the DLL methods from 
+// This library is not necessary when you call the DLL methods from
 // another application or language such as LabVIEW or VisualBasic.
 //
 // This methods in this DLL correspond closely with the C++ API.
@@ -28,10 +28,11 @@
 // Copyright (c) 2005-2012 Opal Kelly Incorporated
 // $Rev: 1251 $ $Date: 2012-10-01 22:25:50 -0700 (Mon, 01 Oct 2012) $
 //------------------------------------------------------------------------
+//
+// CDM - removed c++ classes
 
 #include <stdio.h>
 #include <stdlib.h>
-
 #include "okFrontPanelDLL.h"
 
 #if defined(_WIN32)
@@ -75,7 +76,7 @@ dll_entrypoint(DLL *dll, const char *name)
 	ep = (DLL_EP)dlsym(handle, name);
 	return( (dlerror()==0) ? (ep) : ((DLL_EP)NULL) );
 #endif
-}	
+}
 
 
 #if defined(_WIN32) && defined(_UNICODE)
@@ -122,256 +123,6 @@ dll_unload(DLL *dll)
 	dlclose(handle);
 #endif
 }
-
-
-
-#ifdef __cplusplus
-#include <string>
-//------------------------------------------------------------------------
-// okCPLL22150 C++ wrapper class
-//------------------------------------------------------------------------
-bool okCPLL22150::to_bool(Bool x)
-	{ return( (x==TRUE)?(true):(false) ); }
-Bool okCPLL22150::from_bool(bool x)
-	{ return( (x==true)?(TRUE):(FALSE) ); }
-okCPLL22150::okCPLL22150()
-	{ h=okPLL22150_Construct(); }
-void okCPLL22150::SetCrystalLoad(double capload)
-	{ okPLL22150_SetCrystalLoad(h, capload); }
-void okCPLL22150::SetReference(double freq, bool extosc)
-	{ okPLL22150_SetReference(h, freq, from_bool(extosc)); }
-double okCPLL22150::GetReference()
-	{ return(okPLL22150_GetReference(h)); }
-bool okCPLL22150::SetVCOParameters(int p, int q)
-	{ return(to_bool(okPLL22150_SetVCOParameters(h,p,q))); }
-int okCPLL22150::GetVCOP()
-	{ return(okPLL22150_GetVCOP(h)); }
-int okCPLL22150::GetVCOQ()
-	{ return(okPLL22150_GetVCOQ(h)); }
-double okCPLL22150::GetVCOFrequency()
-	{ return(okPLL22150_GetVCOFrequency(h)); }
-void okCPLL22150::SetDiv1(DividerSource divsrc, int n)
-	{ okPLL22150_SetDiv1(h, (ok_DividerSource)divsrc, n); }
-void okCPLL22150::SetDiv2(DividerSource divsrc, int n)
-	{ okPLL22150_SetDiv2(h, (ok_DividerSource)divsrc, n); }
-okCPLL22150::DividerSource okCPLL22150::GetDiv1Source()
-	{ return((DividerSource) okPLL22150_GetDiv1Source(h)); }
-okCPLL22150::DividerSource okCPLL22150::GetDiv2Source()
-	{ return((DividerSource) okPLL22150_GetDiv2Source(h)); }
-int okCPLL22150::GetDiv1Divider()
-	{ return(okPLL22150_GetDiv1Divider(h)); }
-int okCPLL22150::GetDiv2Divider()
-	{ return(okPLL22150_GetDiv2Divider(h)); }
-void okCPLL22150::SetOutputSource(int output, okCPLL22150::ClockSource clksrc)
-	{ okPLL22150_SetOutputSource(h, output, (ok_ClockSource_22150)clksrc); }
-void okCPLL22150::SetOutputEnable(int output, bool enable)
-	{ okPLL22150_SetOutputEnable(h, output, to_bool(enable)); }
-okCPLL22150::ClockSource okCPLL22150::GetOutputSource(int output)
-	{ return( (ClockSource)okPLL22150_GetOutputSource(h, output)); }
-double okCPLL22150::GetOutputFrequency(int output)
-	{ return(okPLL22150_GetOutputFrequency(h, output)); }
-bool okCPLL22150::IsOutputEnabled(int output)
-	{ return(to_bool(okPLL22150_IsOutputEnabled(h, output))); }
-void okCPLL22150::InitFromProgrammingInfo(unsigned char *buf)
-	{ okPLL22150_InitFromProgrammingInfo(h, buf); }
-void okCPLL22150::GetProgrammingInfo(unsigned char *buf)
-	{ okPLL22150_GetProgrammingInfo(h, buf); }
-
-//------------------------------------------------------------------------
-// okCPLL22393 C++ wrapper class
-//------------------------------------------------------------------------
-bool okCPLL22393::to_bool(Bool x)
-	{ return( (x==TRUE)?(true):(false) ); }
-Bool okCPLL22393::from_bool(bool x)
-	{ return( (x==true)?(TRUE):(FALSE) ); }
-okCPLL22393::okCPLL22393()
-	{ h=okPLL22393_Construct(); }
-void okCPLL22393::SetCrystalLoad(double capload)
-	{ okPLL22393_SetCrystalLoad(h, capload); }
-void okCPLL22393::SetReference(double freq)
-	{ okPLL22393_SetReference(h, freq); }
-double okCPLL22393::GetReference()
-	{ return(okPLL22393_GetReference(h)); }
-bool okCPLL22393::SetPLLParameters(int n, int p, int q, bool enable)
-	{ return(to_bool(okPLL22393_SetPLLParameters(h, n, p, q, from_bool(enable)))); }
-bool okCPLL22393::SetPLLLF(int n, int lf)
-	{ return(to_bool(okPLL22393_SetPLLLF(h, n, lf))); }
-bool okCPLL22393::SetOutputDivider(int n, int div)
-	{ return(to_bool(okPLL22393_SetOutputDivider(h, n, div))); }
-bool okCPLL22393::SetOutputSource(int n, okCPLL22393::ClockSource clksrc)
-	{ return(to_bool(okPLL22393_SetOutputSource(h, n, (ok_ClockSource_22393)clksrc))); }
-void okCPLL22393::SetOutputEnable(int n, bool enable)
-	{ okPLL22393_SetOutputEnable(h, n, from_bool(enable)); }
-int okCPLL22393::GetPLLP(int n)
-	{ return(okPLL22393_GetPLLP(h, n)); }
-int okCPLL22393::GetPLLQ(int n)
-	{ return(okPLL22393_GetPLLQ(h, n)); }
-double okCPLL22393::GetPLLFrequency(int n)
-	{ return(okPLL22393_GetPLLFrequency(h, n)); }
-int okCPLL22393::GetOutputDivider(int n)
-	{ return(okPLL22393_GetOutputDivider(h, n)); }
-okCPLL22393::ClockSource okCPLL22393::GetOutputSource(int n)
-	{ return((ClockSource) okPLL22393_GetOutputSource(h, n)); }
-double okCPLL22393::GetOutputFrequency(int n)
-	{ return(okPLL22393_GetOutputFrequency(h, n)); }
-bool okCPLL22393::IsOutputEnabled(int n)
-	{ return(to_bool(okPLL22393_IsOutputEnabled(h, n))); }
-bool okCPLL22393::IsPLLEnabled(int n)
-	{ return(to_bool(okPLL22393_IsPLLEnabled(h, n))); }
-void okCPLL22393::InitFromProgrammingInfo(unsigned char *buf)
-	{ okPLL22393_InitFromProgrammingInfo(h, buf); }
-void okCPLL22393::GetProgrammingInfo(unsigned char *buf)
-	{ okPLL22393_GetProgrammingInfo(h, buf); }
-
-//------------------------------------------------------------------------
-// okCFrontPanel C++ wrapper class
-//------------------------------------------------------------------------
-bool okCFrontPanel::to_bool(Bool x)
-	{ return( (x==TRUE)?(true):(false) ); }
-Bool okCFrontPanel::from_bool(bool x)
-	{ return( (x==true)?(TRUE):(FALSE) ); }
-okCFrontPanel::okCFrontPanel()
-	{ h=okFrontPanel_Construct(); }
-okCFrontPanel::~okCFrontPanel()
-	{ okFrontPanel_Destruct(h); }
-int okCFrontPanel::GetHostInterfaceWidth()
-	{ return(okFrontPanel_GetHostInterfaceWidth(h)); }
-bool okCFrontPanel::IsHighSpeed()
-	{ return(to_bool(okFrontPanel_IsHighSpeed(h))); }
-okCFrontPanel::BoardModel okCFrontPanel::GetBoardModel()
-	{ return((okCFrontPanel::BoardModel)okFrontPanel_GetBoardModel(h)); }
-std::string okCFrontPanel::GetBoardModelString(okCFrontPanel::BoardModel m)
-	{
-		char str[MAX_BOARDMODELSTRING_LENGTH];
-		okFrontPanel_GetBoardModelString(h, (ok_BoardModel)m, str);
-		return(std::string(str));
-	}
-int okCFrontPanel::GetDeviceCount()
-	{ return(okFrontPanel_GetDeviceCount(h)); }
-okCFrontPanel::BoardModel okCFrontPanel::GetDeviceListModel(int num)
-	{ return((okCFrontPanel::BoardModel)okFrontPanel_GetDeviceListModel(h, num)); }
-std::string okCFrontPanel::GetDeviceListSerial(int num)
-	{
-		char str[MAX_SERIALNUMBER_LENGTH+1];
-		okFrontPanel_GetDeviceListSerial(h, num, str);
-		str[MAX_SERIALNUMBER_LENGTH] = '\0';
-		return(std::string(str));
-	}
-okCFrontPanel::ErrorCode okCFrontPanel::GetDeviceInfo(okTDeviceInfo *info)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_GetDeviceInfo(h, info)); }
-void okCFrontPanel::EnableAsynchronousTransfers(bool enable)
-	{ okFrontPanel_EnableAsynchronousTransfers(h, to_bool(enable)); }
-okCFrontPanel::ErrorCode okCFrontPanel::OpenBySerial(std::string str)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_OpenBySerial(h, str.c_str())); }
-bool okCFrontPanel::IsOpen()
-	{ return(to_bool(okFrontPanel_IsOpen(h))); }
-int okCFrontPanel::GetDeviceMajorVersion()
-	{ return(okFrontPanel_GetDeviceMajorVersion(h)); }
-int okCFrontPanel::GetDeviceMinorVersion()
-	{ return(okFrontPanel_GetDeviceMinorVersion(h)); }
-std::string okCFrontPanel::GetSerialNumber()
-	{
-		char str[MAX_SERIALNUMBER_LENGTH+1];
-		okFrontPanel_GetSerialNumber(h, str);
-		return(std::string(str));
-	}
-std::string okCFrontPanel::GetDeviceID()
-	{
-		char str[MAX_DEVICEID_LENGTH+1];
-		okFrontPanel_GetDeviceID(h, str);
-		return(std::string(str));
-	}
-void okCFrontPanel::SetDeviceID(const std::string str)
-	{ okFrontPanel_SetDeviceID(h, str.c_str()); }
-okCFrontPanel::ErrorCode okCFrontPanel::SetBTPipePollingInterval(int interval)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_SetBTPipePollingInterval(h, interval)); }
-void okCFrontPanel::SetTimeout(int timeout)
-	{ okFrontPanel_SetTimeout(h, timeout); }
-okCFrontPanel::ErrorCode okCFrontPanel::ResetFPGA()
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_ResetFPGA(h)); }
-okCFrontPanel::ErrorCode okCFrontPanel::ConfigureFPGAFromMemory(unsigned char *data, const unsigned long length, void(*callback)(int, int, void *), void *arg)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_ConfigureFPGAFromMemory(h, data, length)); }
-okCFrontPanel::ErrorCode okCFrontPanel::ConfigureFPGA(const std::string strFilename, void (*callback)(int, int, void *), void *arg)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_ConfigureFPGA(h, strFilename.c_str())); }
-okCFrontPanel::ErrorCode okCFrontPanel::GetFPGABootResetProfile(okTFPGAResetProfile *profile)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_GetFPGABootResetProfile(h, profile)); }
-okCFrontPanel::ErrorCode okCFrontPanel::GetFPGAJTAGResetProfile(okTFPGAResetProfile *profile)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_GetFPGAJTAGResetProfile(h, profile)); }
-okCFrontPanel::ErrorCode okCFrontPanel::ReadRegister(UINT32 addr, UINT32 *data)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_ReadRegister(h, addr, data)); }
-okCFrontPanel::ErrorCode okCFrontPanel::ReadRegisterSet(okTRegisterSet *set)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_ReadRegisterSet(h, set)); }
-okCFrontPanel::ErrorCode okCFrontPanel::SetFPGABootResetProfile(okTFPGAResetProfile *profile)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_SetFPGABootResetProfile(h, profile)); }
-okCFrontPanel::ErrorCode okCFrontPanel::SetFPGAJTAGResetProfile(okTFPGAResetProfile *profile)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_SetFPGAJTAGResetProfile(h, profile)); }
-okCFrontPanel::ErrorCode okCFrontPanel::FlashEraseSector(UINT32 address)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_FlashEraseSector(h, address)); }
-okCFrontPanel::ErrorCode okCFrontPanel::FlashWrite(UINT32 address, UINT32 length, const UINT8 *buf)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_FlashWrite(h, address, length, buf)); }
-okCFrontPanel::ErrorCode okCFrontPanel::FlashRead(UINT32 address, UINT32 length, UINT8 *buf)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_FlashRead(h, address, length, buf)); }
-okCFrontPanel::ErrorCode okCFrontPanel::WriteRegister(UINT32 addr, UINT32 data)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_WriteRegister(h, addr, data)); }
-okCFrontPanel::ErrorCode okCFrontPanel::WriteRegisterSet(okTRegisterSet *set)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_WriteRegisterSet(h, set)); }
-okCFrontPanel::ErrorCode okCFrontPanel::GetWireInValue(int epAddr, UINT32 *val)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_GetWireInValue(h, epAddr, val)); }
-okCFrontPanel::ErrorCode okCFrontPanel::WriteI2C(const int addr, int length, unsigned char *data)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_WriteI2C(h, addr, length, data)); }
-okCFrontPanel::ErrorCode okCFrontPanel::ReadI2C(const int addr, int length, unsigned char *data)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_ReadI2C(h, addr, length, data)); }
-okCFrontPanel::ErrorCode okCFrontPanel::GetPLL22150Configuration(okCPLL22150& pll)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_GetPLL22150Configuration(h, pll.h)); }
-okCFrontPanel::ErrorCode okCFrontPanel::SetPLL22150Configuration(okCPLL22150& pll)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_SetPLL22150Configuration(h, pll.h)); }
-okCFrontPanel::ErrorCode okCFrontPanel::GetEepromPLL22150Configuration(okCPLL22150& pll)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_GetEepromPLL22150Configuration(h, pll.h)); }
-okCFrontPanel::ErrorCode okCFrontPanel::SetEepromPLL22150Configuration(okCPLL22150& pll)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_SetEepromPLL22150Configuration(h, pll.h)); }
-okCFrontPanel::ErrorCode okCFrontPanel::GetPLL22393Configuration(okCPLL22393& pll)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_GetPLL22393Configuration(h, pll.h)); }
-okCFrontPanel::ErrorCode okCFrontPanel::SetPLL22393Configuration(okCPLL22393& pll)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_SetPLL22393Configuration(h, pll.h)); }
-okCFrontPanel::ErrorCode okCFrontPanel::GetEepromPLL22393Configuration(okCPLL22393& pll)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_GetEepromPLL22393Configuration(h, pll.h)); }
-okCFrontPanel::ErrorCode okCFrontPanel::SetEepromPLL22393Configuration(okCPLL22393& pll)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_SetEepromPLL22393Configuration(h, pll.h)); }
-okCFrontPanel::ErrorCode okCFrontPanel::LoadDefaultPLLConfiguration()
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_LoadDefaultPLLConfiguration(h)); }
-bool okCFrontPanel::IsFrontPanelEnabled()
-	{ return(to_bool(okFrontPanel_IsFrontPanelEnabled(h))); }
-bool okCFrontPanel::IsFrontPanel3Supported()
-	{ return(to_bool(okFrontPanel_IsFrontPanel3Supported(h))); }
-//	void UnregisterAll();
-//	void AddEventHandler(okCEventHandler *handler);
-void okCFrontPanel::UpdateWireIns()
-	{ okFrontPanel_UpdateWireIns(h); }
-okCFrontPanel::ErrorCode okCFrontPanel::SetWireInValue(int ep, unsigned long val, unsigned long mask)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_SetWireInValue(h, ep, val, mask)); }
-void okCFrontPanel::UpdateWireOuts()
-	{ okFrontPanel_UpdateWireOuts(h); }
-unsigned long okCFrontPanel::GetWireOutValue(int epAddr)
-	{ return(okFrontPanel_GetWireOutValue(h, epAddr)); }
-okCFrontPanel::ErrorCode okCFrontPanel::ActivateTriggerIn(int epAddr, int bit)
-	{ return((okCFrontPanel::ErrorCode) okFrontPanel_ActivateTriggerIn(h, epAddr, bit)); }
-void okCFrontPanel::UpdateTriggerOuts()
-	{ okFrontPanel_UpdateTriggerOuts(h); }
-bool okCFrontPanel::IsTriggered(int epAddr, unsigned long mask)
-	{ return(to_bool(okFrontPanel_IsTriggered(h, epAddr, mask))); }
-long okCFrontPanel::GetLastTransferLength()
-	{ return(okFrontPanel_GetLastTransferLength(h)); }
-long okCFrontPanel::WriteToPipeIn(int epAddr, long length, unsigned char *data)
-	{ return(okFrontPanel_WriteToPipeIn(h, epAddr, length, data)); }
-long okCFrontPanel::ReadFromPipeOut(int epAddr, long length, unsigned char *data)
-	{ return(okFrontPanel_ReadFromPipeOut(h, epAddr, length, data)); }
-long okCFrontPanel::WriteToBlockPipeIn(int epAddr, int blockSize, long length, unsigned char *data)
-	{ return(okFrontPanel_WriteToBlockPipeIn(h, epAddr, blockSize, length, data)); }
-long okCFrontPanel::ReadFromBlockPipeOut(int epAddr, int blockSize, long length, unsigned char *data)
-	{ return(okFrontPanel_ReadFromBlockPipeOut(h, epAddr, blockSize, length, data)); }
-
-#endif // __cplusplus
-
 
 //------------------------------------------------------------------------
 // Function prototypes
@@ -488,110 +239,110 @@ typedef ok_ErrorCode           (DLL_ENTRY *okFrontPanel_GETWIREINVALUE_FN)      
 //------------------------------------------------------------------------
 OKFRONTPANELDLL_GETVERSION_FN                  _okFrontPanelDLL_GetVersion = NULL;
 
-OKPLL22393_CONSTRUCT_FN                        _okPLL22393_Construct = NULL;
-OKPLL22393_DESTRUCT_FN                         _okPLL22393_Destruct = NULL;
-OKPLL22393_SETCRYSTALLOAD_FN                   _okPLL22393_SetCrystalLoad = NULL;
-OKPLL22393_SETREFERENCE_FN                     _okPLL22393_SetReference = NULL;
-OKPLL22393_GETREFERENCE_FN                     _okPLL22393_GetReference = NULL;
-OKPLL22393_SETPLLPARAMETERS_FN                 _okPLL22393_SetPLLParameters = NULL;
-OKPLL22393_SETPLLLF_FN                         _okPLL22393_SetPLLLF = NULL;
-OKPLL22393_SETOUTPUTDIVIDER_FN                 _okPLL22393_SetOutputDivider = NULL;
-OKPLL22393_SETOUTPUTSOURCE_FN                  _okPLL22393_SetOutputSource = NULL;
-OKPLL22393_SETOUTPUTENABLE_FN                  _okPLL22393_SetOutputEnable = NULL;
-OKPLL22393_GETPLLP_FN                          _okPLL22393_GetPLLP = NULL;
-OKPLL22393_GETPLLQ_FN                          _okPLL22393_GetPLLQ = NULL;
-OKPLL22393_GETPLLFREQUENCY_FN                  _okPLL22393_GetPLLFrequency = NULL;
-OKPLL22393_GETOUTPUTDIVIDER_FN                 _okPLL22393_GetOutputDivider = NULL;
-OKPLL22393_GETOUTPUTSOURCE_FN                  _okPLL22393_GetOutputSource = NULL;
-OKPLL22393_GETOUTPUTFREQUENCY_FN               _okPLL22393_GetOutputFrequency = NULL;
-OKPLL22393_ISOUTPUTENABLED_FN                  _okPLL22393_IsOutputEnabled = NULL;
-OKPLL22393_ISPLLENABLED_FN                     _okPLL22393_IsPLLEnabled = NULL;
-OKPLL22393_INITFROMPROGRAMMINGINFO_FN          _okPLL22393_InitFromProgrammingInfo = NULL;
-OKPLL22393_GETPROGRAMMINGINFO_FN               _okPLL22393_GetProgrammingInfo = NULL;
+static OKPLL22393_CONSTRUCT_FN                        _okPLL22393_Construct = NULL;
+static OKPLL22393_DESTRUCT_FN                         _okPLL22393_Destruct = NULL;
+static OKPLL22393_SETCRYSTALLOAD_FN                   _okPLL22393_SetCrystalLoad = NULL;
+static OKPLL22393_SETREFERENCE_FN                     _okPLL22393_SetReference = NULL;
+static OKPLL22393_GETREFERENCE_FN                     _okPLL22393_GetReference = NULL;
+static OKPLL22393_SETPLLPARAMETERS_FN                 _okPLL22393_SetPLLParameters = NULL;
+static OKPLL22393_SETPLLLF_FN                         _okPLL22393_SetPLLLF = NULL;
+static OKPLL22393_SETOUTPUTDIVIDER_FN                 _okPLL22393_SetOutputDivider = NULL;
+static OKPLL22393_SETOUTPUTSOURCE_FN                  _okPLL22393_SetOutputSource = NULL;
+static OKPLL22393_SETOUTPUTENABLE_FN                  _okPLL22393_SetOutputEnable = NULL;
+static OKPLL22393_GETPLLP_FN                          _okPLL22393_GetPLLP = NULL;
+static OKPLL22393_GETPLLQ_FN                          _okPLL22393_GetPLLQ = NULL;
+static OKPLL22393_GETPLLFREQUENCY_FN                  _okPLL22393_GetPLLFrequency = NULL;
+static OKPLL22393_GETOUTPUTDIVIDER_FN                 _okPLL22393_GetOutputDivider = NULL;
+static OKPLL22393_GETOUTPUTSOURCE_FN                  _okPLL22393_GetOutputSource = NULL;
+static OKPLL22393_GETOUTPUTFREQUENCY_FN               _okPLL22393_GetOutputFrequency = NULL;
+static OKPLL22393_ISOUTPUTENABLED_FN                  _okPLL22393_IsOutputEnabled = NULL;
+static OKPLL22393_ISPLLENABLED_FN                     _okPLL22393_IsPLLEnabled = NULL;
+static OKPLL22393_INITFROMPROGRAMMINGINFO_FN          _okPLL22393_InitFromProgrammingInfo = NULL;
+static OKPLL22393_GETPROGRAMMINGINFO_FN               _okPLL22393_GetProgrammingInfo = NULL;
 
-OKPLL22150_CONSTRUCT_FN                        _okPLL22150_Construct = NULL;
-OKPLL22150_DESTRUCT_FN                         _okPLL22150_Destruct = NULL;
-OKPLL22150_SETCRYSTALLOAD_FN                   _okPLL22150_SetCrystalLoad = NULL;
-OKPLL22150_SETREFERENCE_FN                     _okPLL22150_SetReference = NULL;
-OKPLL22150_GETREFERENCE_FN                     _okPLL22150_GetReference = NULL;
-OKPLL22150_SETVCOPARAMETERS_FN                 _okPLL22150_SetVCOParameters = NULL;
-OKPLL22150_GETVCOP_FN                          _okPLL22150_GetVCOP = NULL;
-OKPLL22150_GETVCOQ_FN                          _okPLL22150_GetVCOQ = NULL;
-OKPLL22150_GETVCOFREQUENCY_FN                  _okPLL22150_GetVCOFrequency = NULL;
-OKPLL22150_SETDIV1_FN                          _okPLL22150_SetDiv1 = NULL;
-OKPLL22150_SETDIV2_FN                          _okPLL22150_SetDiv2 = NULL;
-OKPLL22150_GETDIV1SOURCE_FN                    _okPLL22150_GetDiv1Source = NULL;
-OKPLL22150_GETDIV2SOURCE_FN                    _okPLL22150_GetDiv2Source = NULL;
-OKPLL22150_GETDIV1DIVIDER_FN                   _okPLL22150_GetDiv1Divider = NULL;
-OKPLL22150_GETDIV2DIVIDER_FN                   _okPLL22150_GetDiv2Divider = NULL;
-OKPLL22150_SETOUTPUTSOURCE_FN                  _okPLL22150_SetOutputSource = NULL;
-OKPLL22150_SETOUTPUTENABLE_FN                  _okPLL22150_SetOutputEnable = NULL;
-OKPLL22150_GETOUTPUTSOURCE_FN                  _okPLL22150_GetOutputSource = NULL;
-OKPLL22150_GETOUTPUTFREQUENCY_FN               _okPLL22150_GetOutputFrequency = NULL;
-OKPLL22150_ISOUTPUTENABLED_FN                  _okPLL22150_IsOutputEnabled = NULL;
-OKPLL22150_INITFROMPROGRAMMINGINFO_FN          _okPLL22150_InitFromProgrammingInfo = NULL;
-OKPLL22150_GETPROGRAMMINGINFO_FN               _okPLL22150_GetProgrammingInfo = NULL;
+static OKPLL22150_CONSTRUCT_FN                        _okPLL22150_Construct = NULL;
+static OKPLL22150_DESTRUCT_FN                         _okPLL22150_Destruct = NULL;
+static OKPLL22150_SETCRYSTALLOAD_FN                   _okPLL22150_SetCrystalLoad = NULL;
+static OKPLL22150_SETREFERENCE_FN                     _okPLL22150_SetReference = NULL;
+static OKPLL22150_GETREFERENCE_FN                     _okPLL22150_GetReference = NULL;
+static OKPLL22150_SETVCOPARAMETERS_FN                 _okPLL22150_SetVCOParameters = NULL;
+static OKPLL22150_GETVCOP_FN                          _okPLL22150_GetVCOP = NULL;
+static OKPLL22150_GETVCOQ_FN                          _okPLL22150_GetVCOQ = NULL;
+static OKPLL22150_GETVCOFREQUENCY_FN                  _okPLL22150_GetVCOFrequency = NULL;
+static OKPLL22150_SETDIV1_FN                          _okPLL22150_SetDiv1 = NULL;
+static OKPLL22150_SETDIV2_FN                          _okPLL22150_SetDiv2 = NULL;
+static OKPLL22150_GETDIV1SOURCE_FN                    _okPLL22150_GetDiv1Source = NULL;
+static OKPLL22150_GETDIV2SOURCE_FN                    _okPLL22150_GetDiv2Source = NULL;
+static OKPLL22150_GETDIV1DIVIDER_FN                   _okPLL22150_GetDiv1Divider = NULL;
+static OKPLL22150_GETDIV2DIVIDER_FN                   _okPLL22150_GetDiv2Divider = NULL;
+static OKPLL22150_SETOUTPUTSOURCE_FN                  _okPLL22150_SetOutputSource = NULL;
+static OKPLL22150_SETOUTPUTENABLE_FN                  _okPLL22150_SetOutputEnable = NULL;
+static OKPLL22150_GETOUTPUTSOURCE_FN                  _okPLL22150_GetOutputSource = NULL;
+static OKPLL22150_GETOUTPUTFREQUENCY_FN               _okPLL22150_GetOutputFrequency = NULL;
+static OKPLL22150_ISOUTPUTENABLED_FN                  _okPLL22150_IsOutputEnabled = NULL;
+static OKPLL22150_INITFROMPROGRAMMINGINFO_FN          _okPLL22150_InitFromProgrammingInfo = NULL;
+static OKPLL22150_GETPROGRAMMINGINFO_FN               _okPLL22150_GetProgrammingInfo = NULL;
 
-okFrontPanel_CONSTRUCT_FN                        _okFrontPanel_Construct = NULL;
-okFrontPanel_DESTRUCT_FN                         _okFrontPanel_Destruct = NULL;
-okFrontPanel_GETHOSTINTERFACEWIDTH_FN            _okFrontPanel_GetHostInterfaceWidth = NULL;
-okFrontPanel_ISHIGHSPEED_FN                      _okFrontPanel_IsHighSpeed = NULL;
-okFrontPanel_GETBOARDMODEL_FN                    _okFrontPanel_GetBoardModel = NULL;
-okFrontPanel_GETBOARDMODELSTRING_FN              _okFrontPanel_GetBoardModelString = NULL;
-okFrontPanel_WRITEI2C_FN                         _okFrontPanel_WriteI2C = NULL;
-okFrontPanel_READI2C_FN                          _okFrontPanel_ReadI2C = NULL;
-okFrontPanel_GETDEVICECOUNT_FN                   _okFrontPanel_GetDeviceCount = NULL;
-okFrontPanel_GETDEVICELISTMODEL_FN               _okFrontPanel_GetDeviceListModel = NULL;
-okFrontPanel_GETDEVICELISTSERIAL_FN              _okFrontPanel_GetDeviceListSerial = NULL;
-okFrontPanel_OPENBYSERIAL_FN                     _okFrontPanel_OpenBySerial = NULL;
-okFrontPanel_ISOPEN_FN                           _okFrontPanel_IsOpen = NULL; 
-okFrontPanel_ENABLEASYNCHRONOUSTRANSFERS_FN      _okFrontPanel_EnableAsynchronousTransfers = NULL;
-okFrontPanel_SETBTPIPEPOLLINGINTERVAL_FN         _okFrontPanel_SetBTPipePollingInterval = NULL;
-okFrontPanel_SETTIMEOUT_FN                       _okFrontPanel_SetTimeout = NULL;
-okFrontPanel_GETDEVICEINFO_FN                    _okFrontPanel_GetDeviceInfo = NULL;
-okFrontPanel_GETDEVICEMAJORVERSION_FN            _okFrontPanel_GetDeviceMajorVersion = NULL;
-okFrontPanel_GETDEVICEMINORVERSION_FN            _okFrontPanel_GetDeviceMinorVersion = NULL;
-okFrontPanel_RESETFPGA_FN                        _okFrontPanel_ResetFPGA = NULL;
-okFrontPanel_GETSERIALNUMBER_FN                  _okFrontPanel_GetSerialNumber = NULL;
-okFrontPanel_GETDEVICEID_FN                      _okFrontPanel_GetDeviceID = NULL;
-okFrontPanel_SETDEVICEID_FN                      _okFrontPanel_SetDeviceID = NULL;
-okFrontPanel_CONFIGUREFPGA_FN                    _okFrontPanel_ConfigureFPGA = NULL;
-okFrontPanel_CONFIGUREFPGAFROMMEMORY_FN          _okFrontPanel_ConfigureFPGAFromMemory = NULL;
-okFrontPanel_GETPLL22150CONFIGURATION_FN         _okFrontPanel_GetPLL22150Configuration = NULL;
-okFrontPanel_SETPLL22150CONFIGURATION_FN         _okFrontPanel_SetPLL22150Configuration = NULL;
-okFrontPanel_GETEEPROMPLL22150CONFIGURATION_FN   _okFrontPanel_GetEepromPLL22150Configuration = NULL;
-okFrontPanel_SETEEPROMPLL22150CONFIGURATION_FN   _okFrontPanel_SetEepromPLL22150Configuration = NULL;
-okFrontPanel_GETPLL22393CONFIGURATION_FN         _okFrontPanel_GetPLL22393Configuration = NULL;
-okFrontPanel_SETPLL22393CONFIGURATION_FN         _okFrontPanel_SetPLL22393Configuration = NULL;
-okFrontPanel_GETEEPROMPLL22393CONFIGURATION_FN   _okFrontPanel_GetEepromPLL22393Configuration = NULL;
-okFrontPanel_SETEEPROMPLL22393CONFIGURATION_FN   _okFrontPanel_SetEepromPLL22393Configuration = NULL;
-okFrontPanel_LOADDEFAULTPLLCONFIGURATION_FN      _okFrontPanel_LoadDefaultPLLConfiguration = NULL;
-okFrontPanel_ISFRONTPANELENABLED_FN              _okFrontPanel_IsFrontPanelEnabled = NULL;
-okFrontPanel_ISFRONTPANEL3SUPPORTED_FN           _okFrontPanel_IsFrontPanel3Supported = NULL;
-okFrontPanel_UPDATEWIREINS_FN                    _okFrontPanel_UpdateWireIns = NULL;
-okFrontPanel_SETWIREINVALUE_FN                   _okFrontPanel_SetWireInValue = NULL;
-okFrontPanel_UPDATEWIREOUTS_FN                   _okFrontPanel_UpdateWireOuts = NULL;
-okFrontPanel_GETWIREOUTVALUE_FN                  _okFrontPanel_GetWireOutValue = NULL;
-okFrontPanel_ACTIVATETRIGGERIN_FN                _okFrontPanel_ActivateTriggerIn = NULL;
-okFrontPanel_UPDATETRIGGEROUTS_FN                _okFrontPanel_UpdateTriggerOuts = NULL;
-okFrontPanel_ISTRIGGERED_FN                      _okFrontPanel_IsTriggered = NULL;
-okFrontPanel_GETLASTTRANSFERLENGTH_FN            _okFrontPanel_GetLastTransferLength = NULL;
-okFrontPanel_WRITETOPIPEIN_FN                    _okFrontPanel_WriteToPipeIn = NULL;
-okFrontPanel_WRITETOBLOCKPIPEIN_FN               _okFrontPanel_WriteToBlockPipeIn = NULL;
-okFrontPanel_READFROMPIPEOUT_FN                  _okFrontPanel_ReadFromPipeOut = NULL;
-okFrontPanel_READFROMBLOCKPIPEOUT_FN             _okFrontPanel_ReadFromBlockPipeOut = NULL;
-okFrontPanel_FLASHERASESECTOR_FN                 _okFrontPanel_FlashEraseSector = NULL;
-okFrontPanel_FLASHWRITE_FN                       _okFrontPanel_FlashWrite = NULL;
-okFrontPanel_FLASHREAD_FN                        _okFrontPanel_FlashRead = NULL;
-okFrontPanel_GETFPGABOOTRESETPROFILE_FN          _okFrontPanel_GetFPGABootResetProfile = NULL;
-okFrontPanel_GETFPGAJTAGRESETPROFILE_FN          _okFrontPanel_GetFPGAJTAGResetProfile = NULL;
-okFrontPanel_SETFPGABOOTRESETPROFILE_FN          _okFrontPanel_SetFPGABootResetProfile = NULL;
-okFrontPanel_SETFPGAJTAGRESETPROFILE_FN          _okFrontPanel_SetFPGAJTAGResetProfile = NULL;
-okFrontPanel_READREGISTER_FN                     _okFrontPanel_ReadRegister = NULL;
-okFrontPanel_READREGISTERSET_FN                  _okFrontPanel_ReadRegisterSet = NULL;
-okFrontPanel_WRITEREGISTER_FN                    _okFrontPanel_WriteRegister = NULL;
-okFrontPanel_WRITEREGISTERSET_FN                 _okFrontPanel_WriteRegisterSet = NULL;
-okFrontPanel_GETWIREINVALUE_FN                   _okFrontPanel_GetWireInValue = NULL;
+static okFrontPanel_CONSTRUCT_FN                        _okFrontPanel_Construct = NULL;
+static okFrontPanel_DESTRUCT_FN                         _okFrontPanel_Destruct = NULL;
+static okFrontPanel_GETHOSTINTERFACEWIDTH_FN            _okFrontPanel_GetHostInterfaceWidth = NULL;
+static okFrontPanel_ISHIGHSPEED_FN                      _okFrontPanel_IsHighSpeed = NULL;
+static okFrontPanel_GETBOARDMODEL_FN                    _okFrontPanel_GetBoardModel = NULL;
+static okFrontPanel_GETBOARDMODELSTRING_FN              _okFrontPanel_GetBoardModelString = NULL;
+static okFrontPanel_WRITEI2C_FN                         _okFrontPanel_WriteI2C = NULL;
+static okFrontPanel_READI2C_FN                          _okFrontPanel_ReadI2C = NULL;
+static okFrontPanel_GETDEVICECOUNT_FN                   _okFrontPanel_GetDeviceCount = NULL;
+static okFrontPanel_GETDEVICELISTMODEL_FN               _okFrontPanel_GetDeviceListModel = NULL;
+static okFrontPanel_GETDEVICELISTSERIAL_FN              _okFrontPanel_GetDeviceListSerial = NULL;
+static okFrontPanel_OPENBYSERIAL_FN                     _okFrontPanel_OpenBySerial = NULL;
+static okFrontPanel_ISOPEN_FN                           _okFrontPanel_IsOpen = NULL;
+static okFrontPanel_ENABLEASYNCHRONOUSTRANSFERS_FN      _okFrontPanel_EnableAsynchronousTransfers = NULL;
+static okFrontPanel_SETBTPIPEPOLLINGINTERVAL_FN         _okFrontPanel_SetBTPipePollingInterval = NULL;
+static okFrontPanel_SETTIMEOUT_FN                       _okFrontPanel_SetTimeout = NULL;
+static okFrontPanel_GETDEVICEINFO_FN                    _okFrontPanel_GetDeviceInfo = NULL;
+static okFrontPanel_GETDEVICEMAJORVERSION_FN            _okFrontPanel_GetDeviceMajorVersion = NULL;
+static okFrontPanel_GETDEVICEMINORVERSION_FN            _okFrontPanel_GetDeviceMinorVersion = NULL;
+static okFrontPanel_RESETFPGA_FN                        _okFrontPanel_ResetFPGA = NULL;
+static okFrontPanel_GETSERIALNUMBER_FN                  _okFrontPanel_GetSerialNumber = NULL;
+static okFrontPanel_GETDEVICEID_FN                      _okFrontPanel_GetDeviceID = NULL;
+static okFrontPanel_SETDEVICEID_FN                      _okFrontPanel_SetDeviceID = NULL;
+static okFrontPanel_CONFIGUREFPGA_FN                    _okFrontPanel_ConfigureFPGA = NULL;
+static okFrontPanel_CONFIGUREFPGAFROMMEMORY_FN          _okFrontPanel_ConfigureFPGAFromMemory = NULL;
+static okFrontPanel_GETPLL22150CONFIGURATION_FN         _okFrontPanel_GetPLL22150Configuration = NULL;
+static okFrontPanel_SETPLL22150CONFIGURATION_FN         _okFrontPanel_SetPLL22150Configuration = NULL;
+static okFrontPanel_GETEEPROMPLL22150CONFIGURATION_FN   _okFrontPanel_GetEepromPLL22150Configuration = NULL;
+static okFrontPanel_SETEEPROMPLL22150CONFIGURATION_FN   _okFrontPanel_SetEepromPLL22150Configuration = NULL;
+static okFrontPanel_GETPLL22393CONFIGURATION_FN         _okFrontPanel_GetPLL22393Configuration = NULL;
+static okFrontPanel_SETPLL22393CONFIGURATION_FN         _okFrontPanel_SetPLL22393Configuration = NULL;
+static okFrontPanel_GETEEPROMPLL22393CONFIGURATION_FN   _okFrontPanel_GetEepromPLL22393Configuration = NULL;
+static okFrontPanel_SETEEPROMPLL22393CONFIGURATION_FN   _okFrontPanel_SetEepromPLL22393Configuration = NULL;
+static okFrontPanel_LOADDEFAULTPLLCONFIGURATION_FN      _okFrontPanel_LoadDefaultPLLConfiguration = NULL;
+static okFrontPanel_ISFRONTPANELENABLED_FN              _okFrontPanel_IsFrontPanelEnabled = NULL;
+static okFrontPanel_ISFRONTPANEL3SUPPORTED_FN           _okFrontPanel_IsFrontPanel3Supported = NULL;
+static okFrontPanel_UPDATEWIREINS_FN                    _okFrontPanel_UpdateWireIns = NULL;
+static okFrontPanel_SETWIREINVALUE_FN                   _okFrontPanel_SetWireInValue = NULL;
+static okFrontPanel_UPDATEWIREOUTS_FN                   _okFrontPanel_UpdateWireOuts = NULL;
+static okFrontPanel_GETWIREOUTVALUE_FN                  _okFrontPanel_GetWireOutValue = NULL;
+static okFrontPanel_ACTIVATETRIGGERIN_FN                _okFrontPanel_ActivateTriggerIn = NULL;
+static okFrontPanel_UPDATETRIGGEROUTS_FN                _okFrontPanel_UpdateTriggerOuts = NULL;
+static okFrontPanel_ISTRIGGERED_FN                      _okFrontPanel_IsTriggered = NULL;
+static okFrontPanel_GETLASTTRANSFERLENGTH_FN            _okFrontPanel_GetLastTransferLength = NULL;
+static okFrontPanel_WRITETOPIPEIN_FN                    _okFrontPanel_WriteToPipeIn = NULL;
+static okFrontPanel_WRITETOBLOCKPIPEIN_FN               _okFrontPanel_WriteToBlockPipeIn = NULL;
+static okFrontPanel_READFROMPIPEOUT_FN                  _okFrontPanel_ReadFromPipeOut = NULL;
+static okFrontPanel_READFROMBLOCKPIPEOUT_FN             _okFrontPanel_ReadFromBlockPipeOut = NULL;
+static okFrontPanel_FLASHERASESECTOR_FN                 _okFrontPanel_FlashEraseSector = NULL;
+static okFrontPanel_FLASHWRITE_FN                       _okFrontPanel_FlashWrite = NULL;
+static okFrontPanel_FLASHREAD_FN                        _okFrontPanel_FlashRead = NULL;
+static okFrontPanel_GETFPGABOOTRESETPROFILE_FN          _okFrontPanel_GetFPGABootResetProfile = NULL;
+static okFrontPanel_GETFPGAJTAGRESETPROFILE_FN          _okFrontPanel_GetFPGAJTAGResetProfile = NULL;
+static okFrontPanel_SETFPGABOOTRESETPROFILE_FN          _okFrontPanel_SetFPGABootResetProfile = NULL;
+static okFrontPanel_SETFPGAJTAGRESETPROFILE_FN          _okFrontPanel_SetFPGAJTAGResetProfile = NULL;
+static okFrontPanel_READREGISTER_FN                     _okFrontPanel_ReadRegister = NULL;
+static okFrontPanel_READREGISTERSET_FN                  _okFrontPanel_ReadRegisterSet = NULL;
+static okFrontPanel_WRITEREGISTER_FN                    _okFrontPanel_WriteRegister = NULL;
+static okFrontPanel_WRITEREGISTERSET_FN                 _okFrontPanel_WriteRegisterSet = NULL;
+static okFrontPanel_GETWIREINVALUE_FN                   _okFrontPanel_GetWireInValue = NULL;
 
 
 //------------------------------------------------------------------------
@@ -604,7 +355,7 @@ okFrontPanelDLL_GetVersionString()
 }
 
 
-/// Loads the FrontPanel API DLL.  This function returns False if the 
+/// Loads the FrontPanel API DLL.  This function returns False if the
 /// DLL did not load for some reason, True otherwise.
 Bool
 okFrontPanelDLL_LoadLib(okFP_dll_pchar libname)
@@ -730,7 +481,7 @@ okFrontPanelDLL_LoadLib(okFP_dll_pchar libname)
     if (NULL == hLib) {
 		return(FALSE);
     }
-    
+
 	return(TRUE);
 }
 

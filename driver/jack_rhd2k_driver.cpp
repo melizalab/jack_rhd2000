@@ -345,9 +345,8 @@ rhd2k_driver_run_cycle (rhd2k_driver_t *driver)
                 delayed_usecs += driver->last_wait_ust;
                 jack_error("xrun of %.3f usec", delayed_usecs);
                 engine->delay (engine, delayed_usecs);
-                return 0;
         }
-
+        return 0;
 }
 
 static int

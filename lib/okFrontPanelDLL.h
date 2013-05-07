@@ -9,11 +9,13 @@
 // Copyright (c) 2005-2010 Opal Kelly Incorporated
 // $Rev: 1283 $ $Date: 2012-11-06 10:38:53 -0800 (Tue, 06 Nov 2012) $
 //------------------------------------------------------------------------
+//
+// CDM - removed c++ wrapper
 
 #ifndef __okFrontPanelDLL_h__
 #define __okFrontPanelDLL_h__
 
-// The following ifdef block is the standard way of creating macros which make exporting 
+// The following ifdef block is the standard way of creating macros which make exporting
 // from a DLL simpler. All files within this DLL are compiled with the FRONTPANELDLL_EXPORTS
 // symbol defined on the command line.  This symbol should not be defined on any project
 // that uses this DLL.
@@ -41,7 +43,6 @@
 typedef void (* DLL_EP)(void);
 
 #ifdef __cplusplus
-#include <string>
 extern "C" {
 #endif // __cplusplus
 
@@ -80,7 +81,7 @@ typedef enum {
 } ok_ClockSource_22393;
 
 typedef enum {
-	ok_DivSrc_Ref = 0, 
+	ok_DivSrc_Ref = 0,
 	ok_DivSrc_VCO = 1
 } ok_DividerSource;
 
@@ -275,9 +276,9 @@ typedef struct {
 	int             deviceMinorVersion;
 	int             hostInterfaceMajorVersion;
 	int             hostInterfaceMinorVersion;
-	bool            isPLL22150Supported;
-	bool            isPLL22393Supported;
-	bool            isFrontPanelEnabled;
+	Bool            isPLL22150Supported;
+	Bool            isPLL22393Supported;
+	Bool            isFrontPanelEnabled;
 	int             wireWidth;
 	int             triggerWidth;
 	int             pipeWidth;
@@ -421,219 +422,6 @@ okDLLEXPORT long DLL_ENTRY okFrontPanel_ReadFromBlockPipeOut(okFrontPanel_HANDLE
 
 
 #ifdef __cplusplus
-#if !defined(FRONTPANELDLL_EXPORTS)
-//------------------------------------------------------------------------
-// okCPLL22150 C++ wrapper class
-//------------------------------------------------------------------------
-class okCPLL22150
-{
-public:
-	okPLL22150_HANDLE h;
-	enum ClockSource {
-			ClkSrc_Ref=0,
-			ClkSrc_Div1ByN=1,
-			ClkSrc_Div1By2=2,
-			ClkSrc_Div1By3=3,
-            ClkSrc_Div2ByN=4,
-			ClkSrc_Div2By2=5,
-			ClkSrc_Div2By4=6 };
-
-	enum DividerSource {
-			DivSrc_Ref = 0, 
-			DivSrc_VCO = 1 };
-private:
-	bool to_bool(Bool x);
-	Bool from_bool(bool x);
-public:
-	okCPLL22150();
-	void SetCrystalLoad(double capload);
-	void SetReference(double freq, bool extosc);
-	double GetReference();
-	bool SetVCOParameters(int p, int q);
-	int GetVCOP();
-	int GetVCOQ();
-	double GetVCOFrequency();
-	void SetDiv1(DividerSource divsrc, int n);
-	void SetDiv2(DividerSource divsrc, int n);
-	DividerSource GetDiv1Source();
-	DividerSource GetDiv2Source();
-	int GetDiv1Divider();
-	int GetDiv2Divider();
-	void SetOutputSource(int output, ClockSource clksrc);
-	void SetOutputEnable(int output, bool enable);
-	ClockSource GetOutputSource(int output);
-	double GetOutputFrequency(int output);
-	bool IsOutputEnabled(int output);
-	void InitFromProgrammingInfo(unsigned char *buf);
-	void GetProgrammingInfo(unsigned char *buf);
-};
-
-//------------------------------------------------------------------------
-// okCPLL22150 C++ wrapper class
-//------------------------------------------------------------------------
-class okCPLL22393
-{
-public:
-	okPLL22393_HANDLE h;
-	enum ClockSource {
-			ClkSrc_Ref=0,
-			ClkSrc_PLL0_0=2,
-			ClkSrc_PLL0_180=3,
-			ClkSrc_PLL1_0=4,
-			ClkSrc_PLL1_180=5,
-			ClkSrc_PLL2_0=6,
-			ClkSrc_PLL2_180=7 };
-private:
-	bool to_bool(Bool x);
-	Bool from_bool(bool x);
-public:
-	okCPLL22393();
-	void SetCrystalLoad(double capload);
-	void SetReference(double freq);
-	double GetReference();
-	bool SetPLLParameters(int n, int p, int q, bool enable=true);
-	bool SetPLLLF(int n, int lf);
-	bool SetOutputDivider(int n, int div);
-	bool SetOutputSource(int n, ClockSource clksrc);
-	void SetOutputEnable(int n, bool enable);
-	int GetPLLP(int n);
-	int GetPLLQ(int n);
-	double GetPLLFrequency(int n);
-	int GetOutputDivider(int n);
-	ClockSource GetOutputSource(int n);
-	double GetOutputFrequency(int n);
-	bool IsOutputEnabled(int n);
-	bool IsPLLEnabled(int n);
-	void InitFromProgrammingInfo(unsigned char *buf);
-	void GetProgrammingInfo(unsigned char *buf);
-};
-
-//------------------------------------------------------------------------
-// okCFrontPanel C++ wrapper class
-//------------------------------------------------------------------------
-class okCFrontPanel
-{
-public:
-	okFrontPanel_HANDLE h;
-	enum BoardModel {
-		brdUnknown=0,
-		brdXEM3001v1=1,
-		brdXEM3001v2=2,
-		brdXEM3010=3,
-		brdXEM3005=4,
-		brdXEM3001CL=5,
-		brdXEM3020=6,
-		brdXEM3050=7,
-		brdXEM9002=8,
-		brdXEM3001RB=9,
-		brdXEM5010=10,
-		brdXEM6110LX45=11,
-		brdXEM6110LX150=15,
-		brdXEM6001=12,
-		brdXEM6010LX45=13,
-		brdXEM6010LX150=14,
-		brdXEM6006LX9=16,
-		brdXEM6006LX16=17,
-		brdXEM6006LX25=18,
-		brdXEM5010LX110=19,
-		brdZEM4310=20,
-		brdXEM6310LX45=21,
-		brdXEM6310LX150=22,
-		brdXEM6110v2LX45=23,
-		brdXEM6110v2LX150=24
-	};
-	enum ErrorCode {
-		NoError                    = 0,
-		Failed                     = -1,
-		Timeout                    = -2,
-		DoneNotHigh                = -3,
-		TransferError              = -4,
-		CommunicationError         = -5,
-		InvalidBitstream           = -6,
-		FileError                  = -7,
-		DeviceNotOpen              = -8,
-		InvalidEndpoint            = -9,
-		InvalidBlockSize           = -10,
-		I2CRestrictedAddress       = -11,
-		I2CBitError                = -12,
-		I2CNack                    = -13,
-		I2CUnknownStatus           = -14,
-		UnsupportedFeature         = -15,
-		FIFOUnderflow              = -16,
-		FIFOOverflow               = -17,
-		DataAlignmentError         = -18,
-		InvalidResetProfile        = -19,
-		InvalidParameter           = -20
-	};
-private:
-	bool to_bool(Bool x);
-	Bool from_bool(bool x);
-public:
-	okCFrontPanel();
-	~okCFrontPanel();
-	int GetHostInterfaceWidth();
-	BoardModel GetBoardModel();
-	std::string GetBoardModelString(BoardModel m);
-	int GetDeviceCount();
-	ErrorCode GetFPGABootResetProfile(okTFPGAResetProfile *profile);
-	ErrorCode GetFPGAJTAGResetProfile(okTFPGAResetProfile *profile);
-	ErrorCode SetFPGABootResetProfile(okTFPGAResetProfile *profile);
-	ErrorCode SetFPGAJTAGResetProfile(okTFPGAResetProfile *profile);
-	ErrorCode FlashEraseSector(UINT32 address);
-	ErrorCode FlashWrite(UINT32 address, UINT32 length, const UINT8 *buf);
-	ErrorCode FlashRead(UINT32 address, UINT32 length, UINT8 *buf);
-	ErrorCode ReadRegister(UINT32 addr, UINT32 *data);
-	ErrorCode ReadRegisterSet(okTRegisterSet *set);
-	ErrorCode WriteRegister(UINT32 addr, UINT32 data);
-	ErrorCode WriteRegisterSet(okTRegisterSet *set);
-	BoardModel GetDeviceListModel(int num);
-	std::string GetDeviceListSerial(int num);
-	void EnableAsynchronousTransfers(bool enable);
-	ErrorCode OpenBySerial(std::string str = "");
-	bool IsOpen();
-	ErrorCode GetDeviceInfo(okTDeviceInfo *info);
-	int GetDeviceMajorVersion();
-	int GetDeviceMinorVersion();
-	std::string GetSerialNumber();
-	std::string GetDeviceID();
-	void SetDeviceID(const std::string str);
-	ErrorCode SetBTPipePollingInterval(int interval);
-	void SetTimeout(int timeout);
-	ErrorCode ResetFPGA();
-	ErrorCode ConfigureFPGAFromMemory(unsigned char *data, const unsigned long length,
-				void(*callback)(int, int, void *) = NULL, void *arg = NULL);
-	ErrorCode ConfigureFPGA(const std::string strFilename,
-				void (*callback)(int, int, void *) = NULL, void *arg = NULL);
-	ErrorCode WriteI2C(const int addr, int length, unsigned char *data);
-	ErrorCode ReadI2C(const int addr, int length, unsigned char *data);
-	ErrorCode GetPLL22150Configuration(okCPLL22150& pll);
-	ErrorCode SetPLL22150Configuration(okCPLL22150& pll);
-	ErrorCode GetEepromPLL22150Configuration(okCPLL22150& pll);
-	ErrorCode SetEepromPLL22150Configuration(okCPLL22150& pll);
-	ErrorCode GetPLL22393Configuration(okCPLL22393& pll);
-	ErrorCode SetPLL22393Configuration(okCPLL22393& pll);
-	ErrorCode GetEepromPLL22393Configuration(okCPLL22393& pll);
-	ErrorCode SetEepromPLL22393Configuration(okCPLL22393& pll);
-	ErrorCode LoadDefaultPLLConfiguration();
-	bool IsHighSpeed();
-	bool IsFrontPanelEnabled();
-	bool IsFrontPanel3Supported();
-	void UpdateWireIns();
-	ErrorCode GetWireInValue(int epAddr, UINT32 *val);
-	ErrorCode SetWireInValue(int ep, unsigned long val, unsigned long mask = 0xffffffff);
-	void UpdateWireOuts();
-	unsigned long GetWireOutValue(int epAddr);
-	ErrorCode ActivateTriggerIn(int epAddr, int bit);
-	void UpdateTriggerOuts();
-	bool IsTriggered(int epAddr, unsigned long mask);
-	long GetLastTransferLength();
-	long WriteToPipeIn(int epAddr, long length, unsigned char *data);
-	long ReadFromPipeOut(int epAddr, long length, unsigned char *data);
-	long WriteToBlockPipeIn(int epAddr, int blockSize, long length, unsigned char *data);
-	long ReadFromBlockPipeOut(int epAddr, int blockSize, long length, unsigned char *data);
-};
-#endif // !defined(FRONTPANELDLL_EXPORTS)
-
 }
 #endif // __cplusplus
 
