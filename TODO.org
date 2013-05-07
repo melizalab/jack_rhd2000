@@ -404,3 +404,15 @@ slots to sampling one of the ADCs at full sampling rate.
 * DONE fix buffer size callback
 
 didn't need to start and stop acquisition
+* TODO load bitfile from jack directory
+
+* TODO installation instructions for debian
+
+Need 7.0+ (wheezy)
+
+** TODO realtime kernel?
+
+** TODO install jackd
+
+: apt-get install jackd1 libjack-dev
+: apt-get source jackd1
