@@ -400,13 +400,16 @@ the same as the amplifier. It might be nice to dedicate one of the aux command
 slots to sampling one of the ADCs at full sampling rate.
 
 * TODO document evalboard class
-* TODO better error messages for bad filtering values
+* DONE better error messages for bad filtering values
+
+relevant functions now throw errors
+
 * DONE fix buffer size callback
 
 didn't need to start and stop acquisition
-* TODO load bitfile from jack directory
+* DONE load bitfile from jack directory
 
-probably just need to set a compile time variable
+could set a compile time variable, but I'm just going to force the user to set JACK_DRIVER_DIR
 
 * TODO installation instructions for debian
 

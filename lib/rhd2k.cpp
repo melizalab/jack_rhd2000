@@ -66,33 +66,33 @@ static const double Pi = 2*acos(0.0);
 
 
 // Returns the value of the RH1 resistor (in ohms) corresponding to a particular upper
-// bandwidth value (in Hz).
+// cutoff value (in Hz).
 static double
-rH1_from_upper_bandwidth(double upper_bandwidth)
+rH1_from_upper_cutoff(double upper_cutoff)
 {
-    double log10f = log10(upper_bandwidth);
+    double log10f = log10(upper_cutoff);
 
     return 0.9730 * pow(10.0, (8.0968 - 1.1892 * log10f + 0.04767 * log10f * log10f));
 }
 
 // Returns the value of the RH2 resistor (in ohms) corresponding to a particular upper
-// bandwidth value (in Hz).
+// cutoff value (in Hz).
 static double
-rH2_from_upper_bandwidth(double upper_bandwidth)
+rH2_from_upper_cutoff(double upper_cutoff)
 {
-    double log10f = log10(upper_bandwidth);
+    double log10f = log10(upper_cutoff);
 
     return 1.0191 * pow(10.0, (8.1009 - 1.0821 * log10f + 0.03383 * log10f * log10f));
 }
 
 // Returns the value of the RL resistor (in ohms) corresponding to a particular lower
-// bandwidth value (in Hz).
+// cutoff value (in Hz).
 static double
-rL_from_lower_bandwidth(double lower_bandwidth)
+rL_from_lower_cutoff(double lower_cutoff)
 {
-    double log10f = log10(lower_bandwidth);
+    double log10f = log10(lower_cutoff);
 
-    if (lower_bandwidth < 4.0) {
+    if (lower_cutoff < 4.0) {
         return 1.0061 * pow(10.0, (4.9391 - 1.2088 * log10f + 0.5698 * log10f * log10f +
                                    0.1442 * log10f * log10f * log10f));
     } else {
@@ -100,10 +100,10 @@ rL_from_lower_bandwidth(double lower_bandwidth)
     }
 }
 
-// Returns the amplifier upper bandwidth (in Hz) corresponding to a particular value
+// Returns the amplifier upper cutoff (in Hz) corresponding to a particular value
 // of the resistor RH1 (in ohms).
 static double
-upper_bandwidth_from_RH1(double rH1)
+upper_cutoff_from_RH1(double rH1)
 {
     double a, b, c;
 
@@ -114,10 +114,10 @@ upper_bandwidth_from_RH1(double rH1)
     return pow(10.0, ((-b - sqrt(b * b - 4 * a * c))/(2 * a)));
 }
 
-// Returns the amplifier upper bandwidth (in Hz) corresponding to a particular value
+// Returns the amplifier upper cutoff (in Hz) corresponding to a particular value
 // of the resistor RH2 (in ohms).
 static double
-upper_bandwidth_from_RH2(double rH2)
+upper_cutoff_from_RH2(double rH2)
 {
     double a, b, c;
 
@@ -128,10 +128,10 @@ upper_bandwidth_from_RH2(double rH2)
     return pow(10.0, ((-b - sqrt(b * b - 4 * a * c))/(2 * a)));
 }
 
-// Returns the amplifier lower bandwidth (in Hz) corresponding to a particular value
+// Returns the amplifier lower cutoff (in Hz) corresponding to a particular value
 // of the resistor RL (in ohms).
 static double
-lower_bandwidth_from_RL(double rL)
+lower_cutoff_from_RL(double rL)
 {
     double a, b, c;
 
@@ -160,12 +160,12 @@ rhd2000::rhd2000(size_t sampling_rate)
         memcpy(_registers, ram_register_defaults, ram_register_count * sizeof(data_type));
         set_sampling_rate_registers();
         set_dsp_cutoff(1.0);
-        set_upper_bandwidth(10000);
-        set_lower_bandwidth(1.0);
+        set_upper_cutoff(10000);
+        set_lower_cutoff(1.0);
 }
 
 double
-rhd2000::upper_bandwidth() const {
+rhd2000::upper_cutoff() const {
         int rh1dac1 = _registers[RH1_DAC1R] & RH1_DAC1M;
         int rh1dac2 = _registers[RH1_DAC2R] & RH1_DAC2M;
         int rh2dac1 = _registers[RH2_DAC1R] & RH2_DAC1M;
@@ -173,24 +173,24 @@ rhd2000::upper_bandwidth() const {
 
         double rh1 = RH1Base + RH1Dac1Unit * rh1dac1 + RH1Dac2Unit * rh1dac2;
         double rh2 = RH2Base + RH2Dac1Unit * rh2dac1 + RH2Dac2Unit * rh2dac2;
-        return sqrt(upper_bandwidth_from_RH1(rh1) * upper_bandwidth_from_RH2(rh2));
+        return sqrt(upper_cutoff_from_RH1(rh1) * upper_cutoff_from_RH2(rh2));
 }
 
 void
-rhd2000::set_upper_bandwidth(double hz)
+rhd2000::set_upper_cutoff(double hz)
 {
         int rh1dac1, rh1dac2, rh2dac1, rh2dac2;
         double rh1target, rh2target;
-        // Upper bandwidths higher than 30 kHz don't work well with the RHD2000 amplifiers
-        if (hz > 30000.0) hz = 30000.0;
+        // Upper cutoffs higher than 30 kHz don't work well with the RHD2000 amplifiers
+        if (hz > 30000.0) throw daq_error("upper cutoff cannot exceed 30 kHz");
+        if (hz < 100.0) throw daq_error("upper cutoff cannot be less than 100 Hz");
 
-
-        rh1target = rH1_from_upper_bandwidth(hz);
+        rh1target = rH1_from_upper_cutoff(hz);
         rh1dac2 = floor((rh1target - RH1Base) / RH1Dac2Unit);
         rh1dac1 = round((rh1target - RH1Base - rh1dac2 * RH1Dac2Unit) / RH1Dac1Unit);
         assert(rh1dac1 >= 0 && rh1dac2 >= 0 && rh1dac1 <= RH1_DAC1M && rh1dac2 <= RH1_DAC2M);
 
-        rh2target = rH2_from_upper_bandwidth(hz);
+        rh2target = rH2_from_upper_cutoff(hz);
         rh2dac2 = floor((rh2target - RH2Base) / RH2Dac2Unit);
         rh2dac1 = round((rh2target - RH2Base - rh2dac2 * RH2Dac2Unit) / RH2Dac1Unit);
         assert(rh2dac1 >= 0 && rh2dac2 >= 0 && rh2dac1 <= RH2_DAC1M && rh2dac2 <= RH2_DAC2M);
@@ -202,33 +202,33 @@ rhd2000::set_upper_bandwidth(double hz)
 
 #ifndef NDEBUG
         // test bit math
-        double expect1 = upper_bandwidth_from_RH1(RH1Base + RH1Dac1Unit * rh1dac1 + RH1Dac2Unit * rh1dac2);
-        double expect2 = upper_bandwidth_from_RH2(RH2Base + RH2Dac1Unit * rh2dac1 + RH2Dac2Unit * rh2dac2);
-        assert(upper_bandwidth() == sqrt(expect1 * expect2));
+        double expect1 = upper_cutoff_from_RH1(RH1Base + RH1Dac1Unit * rh1dac1 + RH1Dac2Unit * rh1dac2);
+        double expect2 = upper_cutoff_from_RH2(RH2Base + RH2Dac1Unit * rh2dac1 + RH2Dac2Unit * rh2dac2);
+        assert(upper_cutoff() == sqrt(expect1 * expect2));
 #endif
 
 }
 
 double
-rhd2000::lower_bandwidth() const
+rhd2000::lower_cutoff() const
 {
         int rldac1 = _registers[RL_DAC1R] & RL_DAC1M;
         int rldac2 = _registers[RL_DAC2R] & RL_DAC2M;
         int rldac3 = (_registers[RL_DAC3R] & RL_DAC3M) > 0;
         double rl = RLBase + RLDac1Unit * rldac1 + RLDac2Unit * rldac2 + RLDac3Unit * rldac3;
-        return lower_bandwidth_from_RL(rl);
+        return lower_cutoff_from_RL(rl);
 }
 
 void
-rhd2000::set_lower_bandwidth(double hz)
+rhd2000::set_lower_cutoff(double hz)
 {
         int dac1, dac2, dac3;
         double target;
 
         // restrict range to published specs (upper=500 in the doc, but 1500 in code)
-        if (hz < 0.1) hz = 0.1;
-        else if (hz > 1500.0) hz = 1500.0;
-        target = rL_from_lower_bandwidth(hz);
+        if (hz < 0.1) throw daq_error("lower cutoff cannot be less than 0.1 Hz");
+        else if (hz > 1500.0) throw daq_error("lower cutoff cannot exceed 1500 Hz");
+        target = rL_from_lower_cutoff(hz);
         dac3 = (hz < 0.15);
         dac2 = floor((target - RLBase - dac3 * RLDac3Unit) / RLDac2Unit);
         dac1 = round((target - RLBase - dac3 * RLDac3Unit - dac2 * RLDac2Unit) / RLDac1Unit);
@@ -240,10 +240,10 @@ rhd2000::set_lower_bandwidth(double hz)
 
 #ifndef NDEBUG
         // test bit math
-        double expected = lower_bandwidth_from_RL(RLBase + RLDac1Unit * dac1 +
+        double expected = lower_cutoff_from_RL(RLBase + RLDac1Unit * dac1 +
                                                   RLDac2Unit * dac2 +
                                                   RLDac3Unit * dac3);
-        assert(lower_bandwidth() == expected);
+        assert(lower_cutoff() == expected);
 #endif
 }
 
@@ -519,7 +519,7 @@ operator<< (std::ostream &o, rhd2000 const &r)
                 if (r.chip_id() == 1) o << "RHD2132";
                 else o << "RHD2116";
                 o << " (rev=" << r.revision() << ", amps=" << r.amps_powered() << '/' << r.amps() << "):"
-                  << " bandw: " << r.lower_bandwidth() << " - " << r.upper_bandwidth() << " Hz"
+                  << " bandw: " << r.lower_cutoff() << " - " << r.upper_cutoff() << " Hz"
                   << "; dsp cut: ";
                 if (r.dsp_enabled())
                         o << r.dsp_cutoff() << " Hz";

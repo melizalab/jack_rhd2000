@@ -47,11 +47,11 @@ public:
         ~rhd2000() {}
 
         /* public methods to update register values */
-        double upper_bandwidth() const;
-        void set_upper_bandwidth(double);
+        double upper_cutoff() const;
+        void set_upper_cutoff(double);
 
-        double lower_bandwidth() const;
-        void set_lower_bandwidth(double);
+        double lower_cutoff() const;
+        void set_lower_cutoff(double);
 
         bool dsp_enabled() const;
         double dsp_cutoff() const;

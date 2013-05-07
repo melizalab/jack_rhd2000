@@ -71,23 +71,6 @@ enum RhythmEndPoints {
         PipeOutData = 0xa0
 };
 
-template <typename T>
-static void
-print_channel(void const * data, size_t nframes, size_t offset, size_t stride)
-{
-        T const * ptr;
-        offset /= sizeof(T);
-        stride /= sizeof(T);
-        std::cout << offset << ":" << std::hex;
-        for (size_t i = 0; i < nframes; ++i) {
-                ptr = static_cast<T const *>(data) + offset + stride*i;
-                std::cout << " 0x" << *ptr;
-                // printf("%zd: %#hx\n", i, ptr[stride*i]);
-        }
-        std::cout << std::dec << std::endl;
-}
-
-
 char const *
 ok_error::what() const throw()
 {
@@ -115,7 +98,7 @@ ok_error::what() const throw()
 
 evalboard::evalboard(size_t sampling_rate, char const * serial, char const * firmware, char const * libdir)
         : _dev(0), _pll(okPLL22393_Construct()), _cable_lengths(nmosi,0.91), _sampling_rate(0),
-           _board_version(0), _enabled_streams(0), _nactive_streams(0)
+          _board_version(0), _enabled_streams(0), _nactive_streams(0), _dac_sources()
 {
         ulong board_id;
         ok_ErrorCode ec;
@@ -538,8 +521,8 @@ evalboard::configure_port(mosi_id port, double lower, double upper,
                 throw daq_error("can't configure port while system is running");
         }
         rhd2000 * amp = _mosi[(size_t)port];
-        amp->set_lower_bandwidth(lower);
-        amp->set_upper_bandwidth(upper);
+        amp->set_lower_cutoff(lower);
+        amp->set_upper_cutoff(upper);
         amp->set_dsp_cutoff(dsp);
         if (amp->amp_power() != amp_power) {
                 amp->set_amp_power(amp_power);
