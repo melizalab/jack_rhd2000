@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <sstream>
 #include <bitset>
@@ -112,13 +113,27 @@ ok_error::what() const throw()
         return buf;
 }
 
-evalboard::evalboard(size_t sampling_rate, char const * serial, char const * firmware)
+evalboard::evalboard(size_t sampling_rate, char const * serial, char const * firmware, char const * libdir)
         : _dev(0), _pll(okPLL22393_Construct()), _cable_lengths(nmosi,0.91), _sampling_rate(0),
            _board_version(0), _enabled_streams(0), _nactive_streams(0)
 {
         ulong board_id;
         ok_ErrorCode ec;
-        if (okFrontPanelDLL_LoadLib(NULL) == false) {
+
+        // allocate storage for the amplifier wrappers. the first amplifier does
+        // double duty for setting mosi output
+        for (size_t i = 0; i < nmiso; ++i) {
+                _miso[i] = new rhd2000(sampling_rate);
+                if (i % 2 == 0) _mosi[i/2] = _miso[i];
+        }
+        std::ostringstream libfile;
+        if (libdir) libfile << libdir;
+        libfile << "/" okLIB_NAME;
+#ifndef NDEBUG
+        std::cout << "opal kelly driver: " << libfile.str() << std::endl;
+#endif
+
+        if (okFrontPanelDLL_LoadLib(libfile.str().c_str()) == false) {
                 throw daq_error("Opal Kelly Front Panel DLL not found");
         }
 
@@ -138,31 +153,31 @@ evalboard::evalboard(size_t sampling_rate, char const * serial, char const * fir
         _pll = okPLL22393_Construct();
         okFrontPanel_GetEepromPLL22393Configuration(_dev, _pll);
 
-        // load fpga firmware if not already configured
-        if (okFrontPanel_IsFrontPanelEnabled(_dev)) {
-                okFrontPanel_UpdateWireOuts(_dev);
-                board_id = okFrontPanel_GetWireOutValue(_dev, WireOutBoardId);
+        // load fpga firmware (user may wish to load a different file)
+        std::ostringstream bitfile;
+        if (firmware) {
+                if ((strncmp(firmware,"/",1) == 0) || !libdir)
+                        bitfile << firmware;
+                else
+                        bitfile << libdir << '/' << firmware;
         }
-        if (board_id != RHYTHM_BOARD_ID) {
-                // load the bitfile
-                if (!firmware) firmware = "rhythm_130302.bit";
-                if ((ec = okFrontPanel_ConfigureFPGA(_dev, firmware)) != ok_NoError) {
-                        throw ok_error(ec);
-                }
-                okFrontPanel_UpdateWireOuts(_dev);
-                board_id = okFrontPanel_GetWireOutValue(_dev, WireOutBoardId);
+        else {
+                if (libdir) bitfile << libdir << '/';
+                bitfile << "rhythm_130302.bit";
+        }
+#ifndef NDEBUG
+        std::cout << "FPGA bitfile: " << bitfile.str() << std::endl;
+#endif
+
+        if ((ec = okFrontPanel_ConfigureFPGA(_dev, bitfile.str().c_str())) != ok_NoError) {
+                throw ok_error(ec);
+        }
+        okFrontPanel_UpdateWireOuts(_dev);
+        board_id = okFrontPanel_GetWireOutValue(_dev, WireOutBoardId);
                 if (board_id != RHYTHM_BOARD_ID) {
                         throw daq_error("uploaded FPGA code is not Rhythm");
                 }
-        }
         _board_version = okFrontPanel_GetWireOutValue(_dev, WireOutBoardVersion);
-
-        // allocate storage for the amplifier wrappers. the first amplifier does
-        // double duty for setting mosi output
-        for (size_t i = 0; i < nmiso; ++i) {
-                _miso[i] = new rhd2000(sampling_rate);
-                if (i % 2 == 0) _mosi[i/2] = _miso[i];
-        }
 
         stop();
         reset_board();

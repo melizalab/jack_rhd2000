@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string>
 #include <iostream>
-#include <sstream>
 #include <list>
 
 #include "rhd2000eval.hpp"
@@ -59,8 +58,6 @@ struct rhd2k_jack_settings_t {
         long eval_adc_enabled;  // 8 bit mask
 
 };
-
-static char const * default_firmware = "rhythm_130302.bit";
 
 static const rhd2k_amp_settings_t default_amp_config = {0xffffffff, 100, 3000, 1, 0};
 static const rhd2k_jack_settings_t default_settings = {1024U, 30000U, 0U,
@@ -159,7 +156,7 @@ rhd2k_driver_attach (rhd2k_driver_t *driver)
 #endif
                 if ((port = jack_port_register (driver->client, name,
                                                 JACK_DEFAULT_AUDIO_TYPE,
-                                                port_flags, 0)) == NULL) {
+                                                port_flags, 0)) == 0) {
                         jack_error ("RHD2K: cannot register port for %s", name);
                         break;
                 }
@@ -176,7 +173,7 @@ rhd2k_driver_detach (rhd2k_driver_t *driver)
 #ifndef NDEBUG
         jack_info("RHD2K: detaching driver");
 #endif
-	if (driver->engine == NULL) {
+	if (driver->engine == 0) {
 		return 0;
 	}
 
@@ -399,6 +396,7 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
         jack_info("RHD2K: initializing driver");
 #endif
         rhd2k_driver_t * driver = new rhd2k_driver_t;
+        char const * libdir = 0;
 
 	/* Setup the jack interfaces */
 	jack_driver_nt_init ((jack_driver_nt_t *) driver);
@@ -414,15 +412,20 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
 	driver->nt_bufsize   = (JackDriverNTBufSizeFunction)  rhd2k_driver_bufsize;
 
 	driver->client = client;
-	driver->engine = NULL;
+	driver->engine = 0;
+        driver->dev = 0;
 	driver->period_size = settings.period_size;
         driver->eval_adc_enabled = settings.eval_adc_enabled;
 	driver->last_wait_ust = 0;
 
         jack_set_latency_callback (client, rhd2k_latency_callback, driver);
 
+        // try to find the lib for the opal kelly board in the same directory as
+        // the driver slib
+        libdir = getenv("JACK_DRIVER_DIR");
+
         try {
-                driver->dev = new evalboard(settings.sample_rate, serial, firmware);
+                driver->dev = new evalboard(settings.sample_rate, serial, firmware, libdir);
                 // configure ports
                 for (size_t i = 0; i < evalboard::nmosi; ++i) {
                         rhd2k_amp_settings_t * a = &settings.amplifiers[i];
@@ -502,7 +505,7 @@ driver_get_descriptor ()
         strcpy(param->name, "firmware");
         param->character = 'F';
 	param->type       = JackDriverParamString;
-        strcpy(param->value.str, default_firmware);
+        // strcpy(param->value.str, "");
         strcpy(param->short_desc, "firmware file for RHD2000 eval board");
         strcpy(param->long_desc, param->short_desc);
 
@@ -564,7 +567,7 @@ driver_initialize(jack_client_t * client, JSList * params)
         memcpy(&cmlparams, &default_settings, sizeof(cmlparams));
 
         char const * dev_serial = 0;
-        char const * firmware = default_firmware;
+        char const * firmware = 0;
 
         for (node = params; node; node = jack_slist_next (node)) {
                 param = (jack_driver_param_t *) node->data;
@@ -605,7 +608,7 @@ driver_finish (jack_driver_t *driver)
 	// If jack hasn't called the detach method, do it now.  As of jack 0.101.1
 	// the detach method was not being called explicitly on closedown, and
 	// we need it to at least deallocate the iso resources.
-	if (drv->dev != NULL)
+	if (drv->dev != 0)
 		rhd2k_driver_detach(drv);
 	rhd2k_driver_delete (drv);
 }

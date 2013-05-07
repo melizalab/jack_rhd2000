@@ -75,7 +75,10 @@ public:
                 std::string name;
         };
 
-        evalboard(std::size_t sampling_rate, char const * serial=0, char const * firmware=0);
+        evalboard(std::size_t sampling_rate,
+                  char const * serial=0,
+                  char const * firmware=0,
+                  char const * libdir=0);
         ~evalboard();
 
         /* daq_interface virtual member functions */

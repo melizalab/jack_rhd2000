@@ -117,7 +117,7 @@ reading data a block at a time is way too slow.  probably need to pull more data
 off the usb bus at a time to be efficient. Blocks are 60 frames.  Probably some
 of this inefficiency is due to how data blocks are filled from the usb buffer.
 
-* TODO design interface
+* DONE design interface
 
 The things we need to do with the eval board are:
 
@@ -406,6 +406,8 @@ slots to sampling one of the ADCs at full sampling rate.
 didn't need to start and stop acquisition
 * TODO load bitfile from jack directory
 
+probably just need to set a compile time variable
+
 * TODO installation instructions for debian
 
 Need 7.0+ (wheezy)
@@ -416,3 +418,5 @@ Need 7.0+ (wheezy)
 
 : apt-get install jackd1 libjack-dev
 : apt-get source jackd1
+* TODO test realtime patch on modeln
+* TODO test alsa_out with intan driver

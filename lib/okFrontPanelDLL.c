@@ -35,26 +35,6 @@
 #include <stdlib.h>
 #include "okFrontPanelDLL.h"
 
-#if defined(_WIN32)
-	#include "windows.h"
-	#if !defined(okLIB_NAME)
-		#if defined(_UNICODE)
-			#define okLIB_NAME L"okFrontPanel.dll"
-		#else
-			#define okLIB_NAME "okFrontPanel.dll"
-		#endif
-	#endif
-#elif defined(__APPLE__)
-	#include <dlfcn.h>
-	#define okLIB_NAME "libokFrontPanel.dylib"
-#elif defined(__linux__)
-	#include <dlfcn.h>
-	#define okLIB_NAME "./libokFrontPanel.so"
-#elif defined(__QNX__)
-	#include <dlfcn.h>
-	#define okLIB_NAME "./libokFrontPanel.so.1"
-#endif
-
 typedef void   DLL;
 static DLL    *hLib = NULL;
 static char    VERSION_STRING[32];
