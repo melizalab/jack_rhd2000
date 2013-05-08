@@ -55,7 +55,6 @@ struct rhd2k_jack_settings_t {
         jack_nframes_t capture_frame_latency;
 
         rhd2k_amp_settings_t amplifiers[evalboard::nmosi];
-        long eval_adc_enabled;  // 8 bit mask
 
 };
 
@@ -64,8 +63,7 @@ static const rhd2k_jack_settings_t default_settings = {1024U, 30000U, 0U,
                                                        {default_amp_config,
                                                         default_amp_config,
                                                         default_amp_config,
-                                                        default_amp_config},
-                                                       0};
+                                                        default_amp_config}};
 
 extern const char driver_client_name[] = "rhd2000";
 
@@ -151,10 +149,7 @@ rhd2k_driver_attach (rhd2k_driver_t *driver)
                 int port_flags = JackPortIsOutput|JackPortIsPhysical|JackPortIsTerminal;
                 char const * name = it->name.c_str();
                 // filter eval board ADC channels
-                if (it->stream == evalboard::EvalADC) {
-			if (!(driver->eval_adc_enabled & (1 << it->channel))) continue;
-                }
-                else {
+                if (it->stream != evalboard::EvalADC) {
                         port_flags |= JackPortCanMonitor;
                 }
 #ifndef NDEBUG
@@ -424,7 +419,6 @@ rhd2k_driver_new(jack_client_t * client, char const * serial, char const * firmw
 	driver->engine = 0;
         driver->dev = 0;
 	driver->period_size = settings.period_size;
-        driver->eval_adc_enabled = settings.eval_adc_enabled;
 	driver->last_wait_ust = 0;
 
         jack_set_latency_callback (client, rhd2k_latency_callback, driver);
@@ -500,7 +494,7 @@ driver_get_descriptor ()
 
 	desc = (jack_driver_desc_t *) calloc (1, sizeof (jack_driver_desc_t));
 	strcpy (desc->name, "rhd2000");
-	desc->nparams = 6 + evalboard::nmosi;
+	desc->nparams = 5 + evalboard::nmosi;
 	desc->params = (jack_driver_param_desc_t *) calloc (desc->nparams,
                                                                     sizeof (jack_driver_param_desc_t));
         param = desc->params;
@@ -547,14 +541,6 @@ driver_get_descriptor ()
         }
 
         param++;
-        strcpy(param->name, "port-eval");
-        param->character = 'X';
-        param->type = JackDriverParamString;
-	sprintf(param->value.str,"%lx", default_settings.eval_adc_enabled);
-        strcpy(param->short_desc, "configure eval board ADC");
-        strcpy(param->long_desc, "configure eval board ADC: channels (8-bit mask)");
-
-        param++;
         strcpy(param->name, "input-latency");
         param->character = 'I';
         param->type = JackDriverParamUInt;
@@ -593,9 +579,6 @@ driver_initialize(jack_client_t * client, JSList * params)
                         break;
                 case 'p':
                         cmlparams.period_size = param->value.ui;
-                        break;
-                case 'X':
-                        sscanf(param->value.str, "%li", &cmlparams.eval_adc_enabled);
                         break;
                 case 'I':
                         cmlparams.capture_frame_latency = param->value.ui;
