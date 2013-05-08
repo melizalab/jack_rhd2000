@@ -1,4 +1,5 @@
 
+#include <signal.h>
 #include <iostream>
 #include <iomanip>
 #include <boost/shared_ptr.hpp>
@@ -13,6 +14,9 @@ static const size_t sampling_rate = 30000;
 static const size_t period_size = 1024;
 static const size_t nperiods = 20;
 boost::shared_ptr<evalboard> dev;
+char * buffer;
+
+volatile bool flag = true;
 
 void
 stats(std::ostream & o, double psum, double p2sum, double pmax, size_t n)
@@ -22,16 +26,31 @@ stats(std::ostream & o, double psum, double p2sum, double pmax, size_t n)
         o << "mean: " << psum << ", stdev: " << sqrt(p2sum - psum * psum) << ", max: " << pmax << endl;
 }
 
-int
-main(int, char**)
+void
+signal_handler(int sig)
 {
-        char * buffer;
-        dev.reset(new evalboard(sampling_rate));
-        dev->configure_port(evalboard::PortA, 100, 3000, 1, 0x0000ffff);
-        dev->scan_ports();
+        flag = false;
+}
 
-        cout << *dev << endl;
+void
+test_one()
+{
+        // read one period
 
+        dev->start(period_size);
+        while(dev->running()) {
+                usleep(10);
+        }
+        assert (dev->nframes() == period_size);
+
+        dev->read(buffer, period_size);
+
+        assert(evalboard::frame_header == *(uint64_t*)buffer);
+}
+
+void
+test_rate()
+{
         // accumulators for calculating average delays
         double us;
         ptime start, stop;
@@ -44,12 +63,15 @@ main(int, char**)
         // stream some data
         size_t period = 0;
         size_t frames;
-        buffer = new char[dev->frame_size() * period_size];
 
         cout << "streaming with frame size " << dev->frame_size() << " bytes, transfer size "
              << dev->frame_size() * period_size << endl;
+        signal(SIGINT,  signal_handler);
+        signal(SIGTERM, signal_handler);
+        signal(SIGHUP,  signal_handler);
+
         dev->start();
-        while (1) {
+        while (flag) {
                 // poll
                 start = microsec_clock::universal_time();
                 frames = dev->nframes();
@@ -83,7 +105,27 @@ main(int, char**)
                         stats(cout << "read time: ", rsum, r2sum, rmax, period);
                 }
         }
+        cout << endl;
+        signal(SIGINT,  SIG_DFL);
+        signal(SIGTERM, SIG_DFL);
+        signal(SIGHUP,  SIG_DFL);
 
+}
+
+int
+main(int, char**)
+{
+        dev.reset(new evalboard(sampling_rate));
+        dev->configure_port(evalboard::PortA, 100, 3000, 1, 0x0000ffff);
+        dev->scan_ports();
+
+        cout << *dev << endl;
+        buffer = new char[dev->frame_size() * period_size];
+
+        test_one();
+
+        test_rate();
         cout << "end of test" << endl;
 
+        delete[] buffer;
 }

@@ -111,6 +111,7 @@ evalboard::evalboard(size_t sampling_rate, char const * serial, char const * fir
         }
         std::ostringstream libfile;
         if (libdir) libfile << libdir;
+        else libfile << ".";
         libfile << "/" okLIB_NAME;
 #ifndef NDEBUG
         std::cout << "opal kelly driver: " << libfile.str() << std::endl;

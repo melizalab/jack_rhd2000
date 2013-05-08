@@ -74,25 +74,25 @@ test_dspcutoff()
 }
 
 void
-test_lowerbandwidth()
+test_lowercutoff()
 {
         const double targets[] = {0.1, 0.5, 1.0, 5.0, 10.0, 50.0, 100.0, 200.0, 500};
         for (size_t i = 0; i < sizeof(targets) / sizeof(double); ++i) {
-                amp->set_lower_bandwidth(targets[i]);
-                cout << "lower bandwidth: requested=" << targets[i] << " Hz"
-                     << ", got=" << amp->lower_bandwidth() << endl;
+                amp->set_lower_cutoff(targets[i]);
+                cout << "lower cutoff: requested=" << targets[i] << " Hz"
+                     << ", got=" << amp->lower_cutoff() << endl;
         }
 }
 
 void
-test_upperbandwidth()
+test_uppercutoff()
 {
         const double targets[] = {100, 150, 200, 250, 300, 500, 750, 1000,
                                   2000, 2500, 3000, 5000, 7500, 10000, 15000, 20000};
         for (size_t i = 0; i < sizeof(targets) / sizeof(double); ++i) {
-                amp->set_upper_bandwidth(targets[i]);
-                cout << "upper bandwidth: requested=" << targets[i] << " Hz"
-                     << ", got=" << amp->upper_bandwidth() << endl;
+                amp->set_upper_cutoff(targets[i]);
+                cout << "upper cutoff: requested=" << targets[i] << " Hz"
+                     << ", got=" << amp->upper_cutoff() << endl;
         }
 }
 int
@@ -101,8 +101,8 @@ main(int, char**)
         amp.reset(new rhd2k::rhd2000(sampling_rate));
         test_base_state();
         test_dspcutoff();
-        test_lowerbandwidth();
-        test_upperbandwidth();
+        test_lowercutoff();
+        test_uppercutoff();
         std::cout << *amp << endl;
 
         std::vector<short> commands;

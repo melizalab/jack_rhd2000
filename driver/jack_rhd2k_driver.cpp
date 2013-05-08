@@ -237,6 +237,7 @@ rhd2k_driver_stop (rhd2k_driver_t *driver)
 static int
 rhd2k_driver_read (rhd2k_driver_t * driver, jack_nframes_t nframes)
 {
+        const float data_scale = 1.0f / 32768.0f;
         evalboard::data_type * p;
         if (driver->engine->freewheeling) {
                 return 0;
@@ -254,7 +255,11 @@ rhd2k_driver_read (rhd2k_driver_t * driver, jack_nframes_t nframes)
                         for (jack_nframes_t t = 0; t < nframes; ++t) {
                                 p = reinterpret_cast<evalboard::data_type*>(
                                         (char*)driver->buffer + chan->byte_offset + t * driver->dev->frame_size());
-                                buf[t] = *p / evalboard::data_type_max;
+                                buf[t] = *p * data_scale;
+                                if (chan->stream != evalboard::EvalADC) {
+                                        // adjust offset of SPI adcs
+                                        buf[t] -= 1.0f;
+                                }
                         }
                 }
                 else {

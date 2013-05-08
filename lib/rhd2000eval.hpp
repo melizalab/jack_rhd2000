@@ -29,9 +29,7 @@ class evalboard : public daq_interface {
 
 public:
         /// how the digitized samples are stored
-        typedef short data_type;
-        /// the maximum value of the data type
-        static const float data_type_max = 32768.0f;
+        typedef unsigned short data_type;
         /// number of output ports (= number of MOSI lines)
         static const std::size_t nmosi = 4;
         /// number of inputs (= number of MISO lines)
