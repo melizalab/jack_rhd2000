@@ -3,55 +3,30 @@
 #include <iomanip>
 #include <boost/shared_ptr.hpp>
 #include "rhd2k.hpp"
+#include "debug.hpp"
 
 using namespace std;
 
 static const unsigned int sampling_rate = 30000;
 boost::shared_ptr<rhd2k::rhd2000> amp;
 
-template <typename It>
-void
-print_commands(std::ostream & o, It begin, It end)
-{
-        int i = 0;
-        It it;
-        int channel, reg, data;
-
-        for (it = begin; it != end; ++it) {
-                if ((*it & 0xc000) == 0x0000) {
-                        channel = (*it & 0x3f00) >> 8;
-                        o << "  command[" << i << "] = CONVERT(" << channel << ")" << endl;
-                } else if ((*it & 0xc000) == 0xc000) {
-                        reg = (*it & 0x3f00) >> 8;
-                        o << "  command[" << i << "] = READ(" << reg << ")" << endl;
-                } else if ((*it & 0xc000) == 0x8000) {
-                        reg = (*it & 0x3f00) >> 8;
-                        data = (*it & 0x00ff);
-                        o << "  command[" << i << "] = WRITE(" << reg << ",0x";
-                        o << hex << internal << setfill('0') << setw(2)
-                          << data
-                          << dec;
-                        o << ")" << endl;
-                } else if (*it == 0x5500) {
-                        o << "  command[" << i << "] = CALIBRATE" << endl;
-                } else if (*it == 0x6a00) {
-                        o << "  command[" << i << "] = CLEAR" << endl;
-                } else {
-                        o << "  command[" << i << "] = INVALID COMMAND: 0x";
-                        o << hex << internal << setfill('0') << setw(4)
-                          << *it
-                          << dec << endl;
-                }
-                ++i;
-        }
-        o << endl;
-}
-
-
 void
 test_base_state()
 {
         assert(!amp->connected());
+
+        amp->set_amp_power(0xffff);
+        assert (amp->amp_power() == 0xffff);
+        assert (amp->amp_power(15));
+        assert (!amp->amp_power(31));
+        assert (amp->amps_powered() == 16);
+
+        amp->set_amp_power(0xffffffff);
+        assert (amp->amp_power() == 0xffffffff);
+        assert (amp->amp_power(15));
+        assert (amp->amp_power(31));
+        assert (amp->amps_powered() == 32);
+
 }
 
 void

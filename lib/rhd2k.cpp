@@ -8,6 +8,7 @@
 #include <bitset>
 #include "daq_interface.hpp"
 #include "rhd2k.hpp"
+#include "debug.hpp"
 
 #define RH1_DAC1R 8
 #define RH1_DAC1M 0x3f

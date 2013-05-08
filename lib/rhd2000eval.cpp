@@ -9,6 +9,7 @@
 #include <bitset>
 #include "rhd2000eval.hpp"
 #include "rhd2k.hpp"
+#include "debug.hpp"
 
 #include "okFrontPanelDLL.h"
 

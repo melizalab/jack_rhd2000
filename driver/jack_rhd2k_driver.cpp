@@ -91,7 +91,7 @@ parse_port_config(char pchar, char const * arg, rhd2k_jack_settings_t & s)
         }
         pptr = &s.amplifiers[(size_t)port];
         // should really do some more validation
-        sscanf(arg, "%li,%lf,%lf,%lf,%lf", &pptr->amp_power, &pptr->lowpass,
+        sscanf(arg, "%lx,%lf,%lf,%lf,%lf", &pptr->amp_power, &pptr->lowpass,
                &pptr->highpass, &pptr->dsp, &pptr->cable_m);
 }
 
