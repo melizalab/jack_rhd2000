@@ -107,6 +107,12 @@ rhd2k_latency_callback (jack_latency_callback_mode_t mode, void* arg)
         if (mode == JackCaptureLatency) {
                 range.min = range.max = driver->period_size + driver->fifo_latency;
         }
+        else {
+                range.min = range.max = 0;
+        }
+#ifndef NDEBUG
+        jack_info ("RHD2K: latency callback: %d--%d frames", range.min, range.max);
+#endif
 
         std::vector<jack_port_t*>::const_iterator it;
 	for (it = driver->capture_ports.begin(); it != driver->capture_ports.end(); ++it) {
@@ -146,7 +152,7 @@ rhd2k_driver_attach (rhd2k_driver_t *driver)
                 char const * name = it->name.c_str();
                 // filter eval board ADC channels
                 if (it->stream == evalboard::EvalADC) {
-                        if (!(driver->eval_adc_enabled & 1 << it->channel)) continue;
+			if (!(driver->eval_adc_enabled & (1 << it->channel))) continue;
                 }
                 else {
                         port_flags |= JackPortCanMonitor;
@@ -160,8 +166,11 @@ rhd2k_driver_attach (rhd2k_driver_t *driver)
                         jack_error ("RHD2K: cannot register port for %s", name);
                         break;
                 }
+
                 driver->capture_ports.push_back(port);
         }
+
+        rhd2k_latency_callback(JackCaptureLatency, driver);
 
 	return jack_activate (driver->client);
 

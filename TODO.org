@@ -423,3 +423,7 @@ Need 7.0+ (wheezy)
 : apt-get source jackd1
 * TODO test realtime patch on modeln
 * TODO test alsa_out with intan driver
+
+generates a fair number of xruns - 284 over about 12 hours.  There's some
+oddness about the sample rate - the driver refuses to go to 30 kHz or any value
+other than 44.1 kHz, so the resampler is bound to be operating in overtime.
