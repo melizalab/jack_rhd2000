@@ -411,19 +411,47 @@ didn't need to start and stop acquisition
 
 could set a compile time variable, but I'm just going to force the user to set JACK_DRIVER_DIR
 
-* TODO installation instructions for debian
+* DONE installation instructions for debian
 
 Need 7.0+ (wheezy)
 
-** TODO realtime kernel?
+** DONE realtime kernel?
 
-** TODO install jackd
+: wget -O /etc/apt/sources.list.d/pengutronix.list http://debian.pengutronix.de/debian/pengutronix.list
+: apt-get -q update
+: apt-get -q --allow-unauthenticated install pengutronix-archive-keyring
+: apt-get -q update
+
+** DONE install jackd
 
 : apt-get install jackd1 libjack-dev
 : apt-get source jackd1
-* TODO test realtime patch on modeln
+* DONE test realtime patch on modeln
 * TODO test alsa_out with intan driver
 
-generates a fair number of xruns - 284 over about 12 hours.  There's some
-oddness about the sample rate - the driver refuses to go to 30 kHz or any value
-other than 44.1 kHz, so the resampler is bound to be operating in overtime.
+generates a fair number of xruns - 284 over about 12 hours.  There's also quite
+a bit of drift as the resampler adjusts itself.
+
+There's some oddness about the sample rate - the driver refuses to go to 30 kHz
+or any value other than 44.1 kHz, so the resampler is bound to be operating in
+overtime.
+
+* TODO compare output to intan's program
+
+** DONE fix scaling of samples from RHD2000
+
+these are sent as unsigned shorts, so the midpoint has to be subtracted off.
+there's an option to send data as twos complement, but this seems simple enough.
+
+** TODO verify that noisy channels are noisy in jack
+
+currently channel 16 is attached to a long wire and picks up a nice 60 Hz
+signal, so can verify that mapping/scaling is correct by looking for this in the
+jack signal.  although this is clearly noisier than other channels, it's not as
+noisy as I'd expect.  One problem is that yass isn't really set up for this kind
+of visualization
+
+double-checked that registers are being set correctly.  the printed values for
+resistors in their small test program are different from the ones that are
+actually used to set the cutoffs (and also somewhat different from what's in the
+published table)

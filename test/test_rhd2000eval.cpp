@@ -10,9 +10,8 @@ using namespace rhd2k;
 using namespace std;
 using namespace boost::posix_time;
 
-static const size_t sampling_rate = 30000;
+static const size_t sampling_rate = 20000;
 static const size_t period_size = 1024;
-static const size_t nperiods = 20;
 boost::shared_ptr<evalboard> dev;
 char * buffer;
 
@@ -35,17 +34,27 @@ signal_handler(int sig)
 void
 test_one()
 {
-        // read one period
+        // read a second of data and save it to disk
+        FILE * fp = fopen("test.dat","wb");
 
-        dev->start(period_size);
+        dev->start(sampling_rate);
         while(dev->running()) {
                 usleep(10);
         }
-        assert (dev->nframes() == period_size);
+        size_t nframes = dev->nframes();
+        assert (nframes == sampling_rate);
 
-        dev->read(buffer, period_size);
+        while (nframes > 0) {
+                dev->read(buffer, period_size);
+                assert(evalboard::frame_header == *(uint64_t*)buffer);
 
-        assert(evalboard::frame_header == *(uint64_t*)buffer);
+                for (size_t t = 0; t < nframes && t < period_size; ++t) {
+                        char * b = buffer + dev->frame_size() * t;
+                        fwrite(b + sizeof(uint64_t), sizeof(char), dev->frame_size() - sizeof(uint64_t), fp);
+                }
+                nframes = dev->nframes();
+        }
+
 }
 
 void
@@ -112,19 +121,22 @@ test_rate()
 
 }
 
+
 int
 main(int, char**)
 {
         dev.reset(new evalboard(sampling_rate));
-        dev->configure_port(evalboard::PortA, 100, 3000, 1, 0x0000ffff);
-        dev->scan_ports();
+        dev->set_cable_meters(evalboard::PortA, 1.8);
+        dev->configure_port(evalboard::PortA, 1.0, 7500, 10.0, 0xffffffff);
+        dev->enable_stream(evalboard::PortA1);
+        dev->calibrate_amplifiers();
 
         cout << *dev << endl;
         buffer = new char[dev->frame_size() * period_size];
 
         test_one();
 
-        test_rate();
+        // test_rate();
         cout << "end of test" << endl;
 
         delete[] buffer;

@@ -81,13 +81,16 @@ main(int, char**)
         std::cout << *amp << endl;
 
         std::vector<short> commands;
-        amp->command_regset(commands, true);
+        amp->command_regset(commands, false);
+        std::cout << "register commandset:" << std::endl;
         print_commands(cout, commands.begin(), commands.end());
 
         amp->command_auxsample(commands);
+        std::cout << "aux sample commandset:" << std::endl;
         print_commands(cout, commands.begin(), commands.end());
 
         std::vector<double> dac(100,0.0);
         amp->command_dac(commands, dac.begin(), dac.end());
+        std::cout << "dac set commandset:" << std::endl;
         print_commands(cout, commands.begin(), commands.end());
 }

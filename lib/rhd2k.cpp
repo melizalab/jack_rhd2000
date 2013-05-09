@@ -51,21 +51,6 @@ static rhd2000::data_type ram_register_defaults[] =
 };
 static const size_t ram_register_count = sizeof(ram_register_defaults);
 
-static const double RH1Base = 2200.0;
-static const double RH1Dac1Unit = 600.0;
-static const double RH1Dac2Unit = 29400.0;
-
-static const double RH2Base = 8700.0;
-static const double RH2Dac1Unit = 763.0;
-static const double RH2Dac2Unit = 38400.0;
-
-static const double RLBase = 3500.0;
-static const double RLDac1Unit = 175.0;
-static const double RLDac2Unit = 12700.0;
-static const double RLDac3Unit = 3000000.0;
-static const double Pi = 2*acos(0.0);
-
-
 // Returns the value of the RH1 resistor (in ohms) corresponding to a particular upper
 // cutoff value (in Hz).
 static double
@@ -101,59 +86,6 @@ rL_from_lower_cutoff(double lower_cutoff)
     }
 }
 
-// Returns the amplifier upper cutoff (in Hz) corresponding to a particular value
-// of the resistor RH1 (in ohms).
-static double
-upper_cutoff_from_RH1(double rH1)
-{
-    double a, b, c;
-
-    a = 0.04767;
-    b = -1.1892;
-    c = 8.0968 - log10(rH1/0.9730);
-
-    return pow(10.0, ((-b - sqrt(b * b - 4 * a * c))/(2 * a)));
-}
-
-// Returns the amplifier upper cutoff (in Hz) corresponding to a particular value
-// of the resistor RH2 (in ohms).
-static double
-upper_cutoff_from_RH2(double rH2)
-{
-    double a, b, c;
-
-    a = 0.03383;
-    b = -1.0821;
-    c = 8.1009 - log10(rH2/1.0191);
-
-    return pow(10.0, ((-b - sqrt(b * b - 4 * a * c))/(2 * a)));
-}
-
-// Returns the amplifier lower cutoff (in Hz) corresponding to a particular value
-// of the resistor RL (in ohms).
-static double
-lower_cutoff_from_RL(double rL)
-{
-    double a, b, c;
-
-    // Quadratic fit below is invalid for values of RL less than 5.1 k_ohm
-    if (rL < 5100.0) {
-        rL = 5100.0;
-    }
-
-    if (rL < 30000.0) {
-        a = 0.08482;
-        b = -0.5916;
-        c = 4.7351 - log10(rL/1.0061);
-    } else {
-        a = 0.3303;
-        b = -1.2100;
-        c = 4.9873 - log10(rL/1.0061);
-    }
-
-    return pow(10.0, ((-b - sqrt(b * b - 4 * a * c))/(2 * a)));
-}
-
 rhd2000::rhd2000(size_t sampling_rate)
         : _sampling_rate(sampling_rate)
 {
@@ -165,16 +97,62 @@ rhd2000::rhd2000(size_t sampling_rate)
         set_lower_cutoff(1.0);
 }
 
+static const double RH1Base = 2200.0;
+static const double RH1Dac1Unit = 600.0;
+static const double RH1Dac2Unit = 29400.0;
+
+static const double RH2Base = 8700.0;
+static const double RH2Dac1Unit = 763.0;
+static const double RH2Dac2Unit = 38400.0;
+
+static const double RLBase = 3500.0;
+static const double RLDac1Unit = 175.0;
+static const double RLDac2Unit = 12700.0;
+static const double RLDac3Unit = 3000000.0;
+static const double Pi = 2*acos(0.0);
+
 double
-rhd2000::upper_cutoff() const {
+rhd2000::rh1() const
+{
         int rh1dac1 = _registers[RH1_DAC1R] & RH1_DAC1M;
         int rh1dac2 = _registers[RH1_DAC2R] & RH1_DAC2M;
+        return RH1Base + RH1Dac1Unit * rh1dac1 + RH1Dac2Unit * rh1dac2;
+}
+
+double
+rhd2000::rh2() const
+{
         int rh2dac1 = _registers[RH2_DAC1R] & RH2_DAC1M;
         int rh2dac2 = _registers[RH2_DAC2R] & RH2_DAC2M;
+        return RH2Base + RH2Dac1Unit * rh2dac1 + RH2Dac2Unit * rh2dac2;
+}
 
-        double rh1 = RH1Base + RH1Dac1Unit * rh1dac1 + RH1Dac2Unit * rh1dac2;
-        double rh2 = RH2Base + RH2Dac1Unit * rh2dac1 + RH2Dac2Unit * rh2dac2;
-        return sqrt(upper_cutoff_from_RH1(rh1) * upper_cutoff_from_RH2(rh2));
+double
+rhd2000::rl() const
+{
+        int rldac1 = _registers[RL_DAC1R] & RL_DAC1M;
+        int rldac2 = _registers[RL_DAC2R] & RL_DAC2M;
+        int rldac3 = (_registers[RL_DAC3R] & RL_DAC3M) > 0;
+        return RLBase + RLDac1Unit * rldac1 + RLDac2Unit * rldac2 + RLDac3Unit * rldac3;
+}
+
+double
+rhd2000::upper_cutoff() const
+{
+        double a, b, c;
+        double rh1cut, rh2cut;
+
+        a = 0.04767;
+        b = -1.1892;
+        c = 8.0968 - log10(rh1()/0.9730);
+        rh1cut = pow(10.0, ((-b - sqrt(b * b - 4 * a * c))/(2 * a)));
+
+        a = 0.03383;
+        b = -1.0821;
+        c = 8.1009 - log10(rh2()/1.0191);
+        rh2cut = pow(10.0, ((-b - sqrt(b * b - 4 * a * c))/(2 * a)));
+
+        return sqrt(rh1cut * rh2cut);
 }
 
 void
@@ -201,23 +179,30 @@ rhd2000::set_upper_cutoff(double hz)
         _registers[RH2_DAC1R] = (_registers[RH2_DAC1R] & ~RH2_DAC1M) | (rh2dac1 & RH2_DAC1M);
         _registers[RH2_DAC2R] = (_registers[RH2_DAC2R] & ~RH2_DAC2M) | (rh2dac2 & RH2_DAC2M);
 
-#ifndef NDEBUG
-        // test bit math
-        double expect1 = upper_cutoff_from_RH1(RH1Base + RH1Dac1Unit * rh1dac1 + RH1Dac2Unit * rh1dac2);
-        double expect2 = upper_cutoff_from_RH2(RH2Base + RH2Dac1Unit * rh2dac1 + RH2Dac2Unit * rh2dac2);
-        assert(upper_cutoff() == sqrt(expect1 * expect2));
-#endif
-
 }
 
 double
 rhd2000::lower_cutoff() const
 {
-        int rldac1 = _registers[RL_DAC1R] & RL_DAC1M;
-        int rldac2 = _registers[RL_DAC2R] & RL_DAC2M;
-        int rldac3 = (_registers[RL_DAC3R] & RL_DAC3M) > 0;
-        double rl = RLBase + RLDac1Unit * rldac1 + RLDac2Unit * rldac2 + RLDac3Unit * rldac3;
-        return lower_cutoff_from_RL(rl);
+        double rL = rl();
+        double a, b, c;
+
+        // Quadratic fit below is invalid for values of RL less than 5.1 k_ohm
+        if (rL < 5100.0) {
+                rL = 5100.0;
+        }
+
+        if (rL < 30000.0) {
+                a = 0.08482;
+                b = -0.5916;
+                c = 4.7351 - log10(rL/1.0061);
+        } else {
+                a = 0.3303;
+                b = -1.2100;
+                c = 4.9873 - log10(rL/1.0061);
+        }
+
+        return pow(10.0, ((-b - sqrt(b * b - 4 * a * c))/(2 * a)));
 }
 
 void
@@ -238,14 +223,6 @@ rhd2000::set_lower_cutoff(double hz)
         _registers[RL_DAC1R] = (_registers[RL_DAC1R] & 0x80) | (dac1 & RL_DAC1M);
         _registers[RL_DAC2R] = (_registers[RL_DAC2R] & 0x80) | (dac2 & RL_DAC2M);
         _registers[RL_DAC3R] = (_registers[RL_DAC2R] & ~RL_DAC3M) | (dac3 << 6);
-
-#ifndef NDEBUG
-        // test bit math
-        double expected = lower_cutoff_from_RL(RLBase + RLDac1Unit * dac1 +
-                                                  RLDac2Unit * dac2 +
-                                                  RLDac3Unit * dac3);
-        assert(lower_cutoff() == expected);
-#endif
 }
 
 bool
@@ -526,6 +503,18 @@ operator<< (std::ostream &o, rhd2000 const &r)
                         o << r.dsp_cutoff() << " Hz";
                 else
                         o << "disabled";
+#ifndef NDEBUG
+                int rh1dac1 = r._registers[RH1_DAC1R] & RH1_DAC1M;
+                int rh1dac2 = r._registers[RH1_DAC2R] & RH1_DAC2M;
+                int rh2dac1 = r._registers[RH2_DAC1R] & RH2_DAC1M;
+                int rh2dac2 = r._registers[RH2_DAC2R] & RH2_DAC2M;
+                int rldac1 = r._registers[RL_DAC1R] & RL_DAC1M;
+                int rldac2 = r._registers[RL_DAC2R] & RL_DAC2M;
+                int rldac3 = (r._registers[RL_DAC3R] & RL_DAC3M) > 0;
+                o << "\nrh1: " << rh1dac1 << ' ' << rh1dac2 << " = " << r.rh1() / 1000. << " kOhm"
+                  << "\nrh2: " << rh2dac1 << ' ' << rh2dac2 << " = " << r.rh2() / 1000. << " kOhm"
+                  << "\nrl:  " << rldac1 << ' ' << rldac2 << ' ' << rldac3 << " = " << r.rl() / 1000. << " kOhm";
+#endif
         }
         else {
                 o << "no amplifier connected";

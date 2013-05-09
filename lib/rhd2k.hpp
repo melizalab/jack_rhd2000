@@ -103,6 +103,38 @@ private:
         const std::size_t _sampling_rate;
         data_type _registers[register_count];
 
+        // onboard resistors (in ohms)
+        double rh1() const;
+        double rh2() const;
+        double rl() const;
+
+        // other readouts
+        data_type adc_ref_bw() const;
+        data_type amp_fast_settle() const;
+        data_type amp_vref_settle() const;
+        data_type adc_comparator_bias() const;
+        data_type adc_comparator_select() const;
+        data_type vdd_sense_enabled() const;
+        data_type adc_buffer_bias() const;
+        data_type mux_bias() const;
+        data_type mux_load() const;
+        data_type temp_sensor1() const;
+        data_type temp_sensor2() const;
+        data_type temp_enable() const;
+        data_type digout_hiz() const;
+        data_type digout() const;
+        data_type weak_miso() const;
+        data_type twoscomp() const;
+        data_type absmode() const;
+        data_type dsp_cutoff_enabled() const;
+        data_type dsp_cutoff_freq() const;
+        data_type zcheck_dac_power() const;
+        data_type zcheck_load() const;
+        data_type zcheck_enabled() const;
+        data_type adc_aux1_enabled() const;
+        data_type adc_aux2_enabled() const;
+        data_type adc_aux3_enabled() const;
+
 };
 
 

@@ -191,6 +191,7 @@ evalboard::start(size_t max_frames)
                 okFrontPanel_SetWireInValue(_dev, WireInMaxTimeStepLsb, max_frames & 0x0000ffff, ulong_mask);
                 okFrontPanel_SetWireInValue(_dev, WireInMaxTimeStepMsb, (max_frames & 0xffff0000) >> 16, ulong_mask);
         }
+        okFrontPanel_SetWireInValue(_dev, WireInLedDisplay, _enabled_streams, ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
 
         okFrontPanel_ActivateTriggerIn(_dev, TrigInSpiStart, 0);
@@ -200,7 +201,14 @@ bool
 evalboard::running() const
 {
         okFrontPanel_UpdateWireOuts(_dev);
-        return (okFrontPanel_GetWireOutValue(_dev, WireOutSpiRunning) & 0x01);
+        if (okFrontPanel_GetWireOutValue(_dev, WireOutSpiRunning) & 0x01) {
+                return true;
+        }
+        else {
+                okFrontPanel_SetWireInValue(_dev, WireInLedDisplay, 0x0, ulong_mask);
+                okFrontPanel_UpdateWireIns(_dev);
+                return false;
+        }
 }
 
 
@@ -210,6 +218,7 @@ evalboard::stop()
         okFrontPanel_SetWireInValue(_dev, WireInMaxTimeStepLsb, 0, ulong_mask);
         okFrontPanel_SetWireInValue(_dev, WireInMaxTimeStepMsb, 0, ulong_mask);
         okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0x00, 0x02);
+        okFrontPanel_SetWireInValue(_dev, WireInLedDisplay, 0x0, ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
 }
 
@@ -534,10 +543,49 @@ evalboard::configure_port(mosi_id port, double lower, double upper,
         // upload new command sequence for this register
         std::vector<short> commands;
         amp->command_regset(commands, false);
+        print_commands(std::cout, commands.begin(), commands.end());
         upload_auxcommand(AuxCmd3, (size_t)port, commands.begin(), commands.end());
         set_port_auxcommand(port, AuxCmd3, (size_t)port); // not really necessary
 
 }
+
+void
+evalboard::calibrate_amplifiers()
+{
+        if (running()) {
+                throw daq_error("can't calibrate while system is running");
+        }
+
+        const size_t nframes = rhd2000::register_sequence_length;
+        std::vector<short> commands(nframes);
+        char * buffer = new char[frame_size() * nframes];
+        for (size_t i = 0; i < nmosi; ++i) {
+                _mosi[i]->command_regset(commands, true);
+                upload_auxcommand(AuxCmd3, (mosi_id)i, commands.begin(), commands.end());
+        }
+
+        start(nframes);
+        while(running()) {
+                usleep(1);
+        }
+        read(buffer, nframes);
+
+        size_t stream_count = 0;
+        for (size_t i = 0; i < nmiso; ++i) {
+                size_t offset = 2 * (6 + 2 * _enabled_streams + stream_count);
+                if (!stream_enabled((miso_id)i)) continue;
+                _miso[stream_count++]->update(buffer, offset, frame_size());
+        }
+        delete[] buffer;
+
+        for (size_t i = 0; i < nmosi; ++i) {
+                _mosi[i]->command_regset(commands, false);
+                upload_auxcommand(AuxCmd3, (mosi_id)i, commands.begin(), commands.end());
+        }
+
+}
+
+
 
 void
 evalboard::scan_ports()
@@ -547,7 +595,6 @@ evalboard::scan_ports()
         }
         const size_t nframes = rhd2000::register_sequence_length;
         std::vector<short> commands(nframes);
-        char * buffer;
 
         // scanning is done at highest sampling rate
         uint old_sampling_rate = sampling_rate();
@@ -558,11 +605,14 @@ evalboard::scan_ports()
         enable_streams(0x00ff);
         // frame size for all streams enabled
         const size_t frame_bytes = frame_size();
+        // scratch buffer
+        char * buffer = new char[frame_bytes * nframes];
+
 
         // upload command sequences to slot 3 - diff bank for each port
         // this has to be done to set sampling rate dependent registers
         for (size_t i = 0; i < nmosi; ++i) {
-                port.command_regset(commands, true);
+                port.command_regset(commands, false);
                 upload_auxcommand(AuxCmd3, (mosi_id)i, commands.begin(), commands.end());
                 set_port_auxcommand((mosi_id)i, AuxCmd3, i);
         }
@@ -576,7 +626,6 @@ evalboard::scan_ports()
                 }
 
                 start(nframes);
-                buffer = new char[frame_bytes * nframes];
                 while(running()) {
                         usleep(1);
                 }
@@ -602,6 +651,7 @@ evalboard::scan_ports()
                         }
                 }
         }
+        delete[] buffer;
 
         // set delays to best values
         std::vector<size_t> best_delays(nmiso);
@@ -623,30 +673,11 @@ evalboard::scan_ports()
                 set_cable_delay((mosi_id)i, std::max(best_delays[i*2], best_delays[i*2+1]));
         }
         enable_streams(stream_enable);
-        set_leds(_enabled_streams);
         update_adc_table();
 
         // return to original sampling rate; update registers at correct delays
         set_sampling_rate(old_sampling_rate);
-        for (size_t i = 0; i < nmosi; ++i) {
-                _mosi[i]->command_regset(commands, false);
-                upload_auxcommand(AuxCmd3, (mosi_id)i, commands.begin(), commands.end());
-        }
-
-        start(nframes);
-        while(running()) {
-                usleep(1);
-        }
-        read(buffer, nframes);
-
-        size_t stream_count = 0;
-        for (size_t i = 0; i < nmiso; ++i) {
-                size_t offset = 2 * (6 + 2 * _enabled_streams + stream_count);
-                if (!stream_enabled((miso_id)i)) continue;
-                _miso[stream_count++]->update(buffer, offset, frame_size());
-        }
-
-        delete[] buffer;
+        calibrate_amplifiers();
 }
 
 void
@@ -848,7 +879,7 @@ operator<< (std::ostream & o, evalboard const & r)
                 o << "\n" << miso << ": "
                   <<  *(r._miso[i]);
                 if (!r.stream_enabled(miso)) o << " (off) ";
-#ifndef NDEBUG
+#if DEBUG == 2
                 else {
                         sprintf(buf1, " (cable %.2f m)", r._cable_lengths[i]);
                         o << buf1;

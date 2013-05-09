@@ -24,6 +24,10 @@ struct ok_error : public daq_error {
 /**
  * Represents an RHD2000 eval board data acquisition system.
  *
+ * RHD2000 chips can be detected automatically or manually. For manual
+ * configuration, set the cable length, enable the stream, and run calibrate().
+ * For automatic configuration, run scan_ports()
+ *
  */
 class evalboard : public daq_interface {
 
@@ -129,6 +133,9 @@ public:
         void configure_port(mosi_id port, double lower, double upper,
                             double dsp, ulong amp_power=0xffffffff);
 
+        /** Run the calibration sequence on all connected amplifiers */
+        void calibrate_amplifiers();
+
         /**
          * Scan ports for connected RHD2000 chips. The amplifiers will be
          * calibrated and progammed with the values set in configure_port().
@@ -142,7 +149,7 @@ public:
         /** true if a stream is enabled */
         bool stream_enabled(miso_id stream) const;
         /** enable or disable a stream for data collection */
-        void enable_stream(miso_id stream, bool enabled);
+        void enable_stream(miso_id stream, bool enabled=true);
 
         void set_leds(ulong value, ulong mask=0xffffffff);
         void ttl_out(ulong value, ulong mask=0xffffffff);
@@ -189,6 +196,7 @@ protected:
         bool dcm_done() const;
         bool clock_locked() const;
         ulong words_in_fifo() const;
+
         /**
          * Enable/disable streams using a bitmask. In constrast to
          * enable_stream, this does not regenerate the adc table.
