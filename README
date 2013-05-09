@@ -1,0 +1,43 @@
+#-*- mode: org -*-
+#+AUTHOR:    Dan Meliza
+#+LANGUAGE:   en
+
+Project description
+
+** Requirements
+
+- POSIX-compliant operating system
+- JACK audio connection kit, =0.121= (http://jackaudio.org)
+
+** Installation
+
+Put jack_rhd2000.so, libokFrontPanel.so, and rhythm_130302.bit in the same
+directory. This can be the directory where the other JACK drivers live.
+
+** Usage
+
+: JACK_DRIVER_DIR=<driver dir> jackd -d rhd2000
+
+Using RT kernel greatly reduces variance of the amount of time it takes to get
+data off the USB bus, but it's still rate-limited so that a single RHD2000 amp
+takes 4.2 out of the available 33 ms in a 1024 frame period.
+
+** Building from source
+
+To build the driver from source, you need
+
+- a modern c++ compiler
+- the JACK source tree for the currently installed JACK version
+
+The test programs require boost (http://http://www.boost.org; >= 1.42)
+
+** License and Warranty
+
+Copyright (c) 2013 C Daniel Meliza.  See COPYING for license information.
+
+This Software is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License, version 2,
+along with this program; if not, see <http://www.gnu.org/licenses>.

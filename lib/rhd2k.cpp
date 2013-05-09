@@ -35,7 +35,7 @@ static rhd2000::data_type ram_register_defaults[] =
   0000, // BOOST_BINARY(00000000),      // 2: set mux bias [5:0] based on sample rate
   0002, // BOOST_BINARY(00000010),      // 3: digout HiZ [1] = 1
   0200, // BOOST_BINARY(10000000),      // 4: set DSP enable [4] and cutoff [3:0] in class
-  0000, // BOOST_BINARY(00000000),      // 5: impedance check DAC disabled
+  0100, // BOOST_BINARY(01000000),      // 5: impedance check DAC disabled
   0200, // BOOST_BINARY(10000000),      // 6: DAC set to 0
   0000, // BOOST_BINARY(00000000),      // 7: zcheck DAC disconnected
   0000, // BOOST_BINARY(00000000),      // 8: offchip rh1 [7] disabled; set rh1 value [5:0] in class
@@ -465,7 +465,7 @@ rhd2000::command_auxsample(std::vector<short> &out) const
         out[c++] = convert(49);                                   // sample temp
 
         for (i = 32; i < 35; ++i) out[c++] = convert(i);          // sample aux1-aux3
-        reg3 &= ~(1 << 4);                                        // sensor 2
+        reg3 &= ~(1 << 3);                                        // sensor 2
         out[c++] = reg_write(reg, reg3);
 
         for (i = 32; i < 35; ++i) out[c++] = convert(i);          // sample aux1-aux3

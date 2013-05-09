@@ -36,6 +36,7 @@ test_one()
 {
         // read a second of data and save it to disk
         FILE * fp = fopen("test.dat","wb");
+        FILE * debug = fopen("test.txt","wt");
 
         dev->start(sampling_rate);
         while(dev->running()) {
@@ -50,10 +51,15 @@ test_one()
 
                 for (size_t t = 0; t < nframes && t < period_size; ++t) {
                         char * b = buffer + dev->frame_size() * t;
+                        fprintf(debug,"%i\t%i\n",
+                                *(uint32_t*)(b+sizeof(uint64_t)),
+                                *(unsigned short*)(b+50));
                         fwrite(b + sizeof(uint64_t), sizeof(char), dev->frame_size() - sizeof(uint64_t), fp);
                 }
                 nframes = dev->nframes();
         }
+        fclose(debug);
+        fclose(fp);
 
 }
 

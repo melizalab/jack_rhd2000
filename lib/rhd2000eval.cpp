@@ -339,15 +339,11 @@ evalboard::reset_board()
         okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0x0001, 0x0001);
         okFrontPanel_UpdateWireIns(_dev);
         // turn off reset, set some values
-        okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0x0000, ulong_mask);
-        // SPI run continuous [bit 1]
-        okFrontPanel_SetWireInValue(_dev, WireInResetRun, 1 << 1, 1 << 1);
-        // DSP settle [bit 2] = 1
-        okFrontPanel_SetWireInValue(_dev, WireInResetRun, 1 << 2, 1 << 2);
-        // dac noise slice [12:6] = 0
-        okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0 << 6, 0x1fc0);
-        // dac gain [15:13] = 2^0
-        okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0 << 13, 0xe000);
+        // SPI run continuous [bit 1] = 1
+        // DSP settle [bit 2] = 0
+        // noise slice [12:6] = 0
+        // dac gain [15:13] = 0 (2**0)
+        okFrontPanel_SetWireInValue(_dev, WireInResetRun, 0x0010, ulong_mask);
         okFrontPanel_UpdateWireIns(_dev);
 
         // wire each amp to its own data stream
@@ -543,7 +539,6 @@ evalboard::configure_port(mosi_id port, double lower, double upper,
         // upload new command sequence for this register
         std::vector<short> commands;
         amp->command_regset(commands, false);
-        print_commands(std::cout, commands.begin(), commands.end());
         upload_auxcommand(AuxCmd3, (size_t)port, commands.begin(), commands.end());
         set_port_auxcommand(port, AuxCmd3, (size_t)port); // not really necessary
 
@@ -572,6 +567,7 @@ evalboard::calibrate_amplifiers()
 
         size_t stream_count = 0;
         for (size_t i = 0; i < nmiso; ++i) {
+                // inspect a frame in gdb: p/x *(short*)(buffer+12)@(_enabled_streams*36+10)
                 size_t offset = 2 * (6 + 2 * _enabled_streams + stream_count);
                 if (!stream_enabled((miso_id)i)) continue;
                 _miso[stream_count++]->update(buffer, offset, frame_size());
