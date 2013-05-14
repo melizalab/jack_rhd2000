@@ -36,7 +36,7 @@ test_one()
 {
         // read a second of data and save it to disk
         FILE * fp = fopen("test.dat","wb");
-        FILE * debug = fopen("test.txt","wt");
+        // FILE * debug = fopen("test.txt","wt");
 
         dev->start(sampling_rate);
         while(dev->running()) {
@@ -51,14 +51,17 @@ test_one()
 
                 for (size_t t = 0; t < nframes && t < period_size; ++t) {
                         char * b = buffer + dev->frame_size() * t;
-                        fprintf(debug,"%i\t%i\n",
-                                *(uint32_t*)(b+sizeof(uint64_t)),
-                                *(unsigned short*)(b+50));
-                        fwrite(b + sizeof(uint64_t), sizeof(char), dev->frame_size() - sizeof(uint64_t), fp);
+                        // fprintf(debug,"%i\t%i\n",
+                        //         *(uint32_t*)(b+sizeof(uint64_t)),
+                        //         *(unsigned short*)(b+50));
+                        fwrite(b + sizeof(uint64_t), 
+			       sizeof(char), 
+			       dev->frame_size() - sizeof(uint64_t), 
+			       fp);
                 }
                 nframes = dev->nframes();
         }
-        fclose(debug);
+        // fclose(debug);
         fclose(fp);
 
 }
@@ -131,7 +134,7 @@ test_rate()
 int
 main(int, char**)
 {
-        dev.reset(new evalboard(sampling_rate));
+  dev.reset(new evalboard(sampling_rate,0,0,"driver"));
         dev->set_cable_meters(evalboard::PortA, 1.8);
         dev->configure_port(evalboard::PortA, 1.0, 7500, 10.0, 0xffffffff);
         dev->enable_stream(evalboard::PortA1);
@@ -142,7 +145,7 @@ main(int, char**)
 
         test_one();
 
-        // test_rate();
+        test_rate();
         cout << "end of test" << endl;
 
         delete[] buffer;

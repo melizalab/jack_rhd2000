@@ -15,8 +15,9 @@ AddOption('--prefix',
           default='/usr/local',
           help='installation prefix')
 
+debug = ARGUMENTS.get('debug',1)
 env = Environment(ENV = os.environ,
-                  CCFLAGS=['-Wall', '-g2'],
+                  CCFLAGS=['-Wall'],
                   PREFIX=GetOption('prefix'),
                   tools=['default'])
 
@@ -34,6 +35,11 @@ elif system == 'Linux':
     # debian wheezy multiarch
     p = Popen("dpkg-architecture -qDEB_HOST_MULTIARCH", stdout=PIPE, stderr=PIPE, shell=True).stdout
     if p is not None: env.Append(LIBPATH=os.path.join('/usr/lib/',p.read().strip()))
+
+if int(debug):
+    env.Append(CCFLAGS=['-g2'])
+else:
+    env.Append(CCFLAGS=['-O2','-DNDEBUG'])
 
 SConscript('lib/SConscript', exports='env')
 SConscript('driver/SConscript', exports='env')

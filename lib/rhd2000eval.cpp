@@ -709,6 +709,8 @@ evalboard::set_auxcommand_length(auxcmd_slot slot, ulong length, ulong loop)
                 wire1 = WireInAuxCmdLoop3;
                 wire2 = WireInAuxCmdLength3;
                 break;
+	default:
+		throw std::logic_error("invalid value for auxcmd slot");
         }
         okFrontPanel_SetWireInValue(_dev, wire1, loop, ulong_mask);
         // rhythm expects an index, not a length
@@ -740,6 +742,8 @@ evalboard::set_port_auxcommand(mosi_id port, auxcmd_slot slot, ulong bank)
         case PortD:
                 shift = 12;
                 break;
+	default:
+		throw std::logic_error("invalid value for port");
         }
 
         switch (slot) {
@@ -752,6 +756,8 @@ evalboard::set_port_auxcommand(mosi_id port, auxcmd_slot slot, ulong bank)
         case AuxCmd3:
                 wire = WireInAuxCmdBank3;
                 break;
+	default:
+		throw std::logic_error("invalid value for auxcmd slot");
         }
         okFrontPanel_SetWireInValue(_dev, wire, bank << shift, 0x000f << shift);
         okFrontPanel_UpdateWireIns(_dev);
