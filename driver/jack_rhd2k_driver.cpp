@@ -298,60 +298,83 @@ rhd2k_driver_run_cycle (rhd2k_driver_t *driver)
 {
         uint64_t const * magic;
         uint32_t const * timestamp;
-	jack_engine_t *engine = driver->engine;
-        jack_time_t wait_enter;
+        uint16_t const * filler;
+	jack_engine_t * engine = driver->engine;
 
-        /* trust, but verify. the opal kelly fpga should be deterministic  */
-        driver->last_wait_ust += driver->period_usecs;
-        wait_enter = engine->get_microseconds();
+        const jack_time_t wait_enter = engine->get_microseconds();
+        const size_t nframes = driver->dev->nframes();
+        const size_t expected = driver->period_size + driver->fifo_latency;
 
+#if DEBUG_CYCLE
+        std::cerr << wait_enter << ": fifo=" << nframes
+                  << "; wait=" << 1e6 / driver->dev->sampling_rate() * (expected - nframes)
+                  << "; idx=" << engine->rolling_client_usecs_index
+                  << std::endl;
+#endif
         // wait long enough to ensure enough data is in the FIFO
-        if (wait_enter < driver->last_wait_ust) {
-                usleep(driver->last_wait_ust - wait_enter);
-        }
-        else {
-                // overrun due to delay in previous cycle - need to flush some data?
+        if (nframes > expected) {
+                jack_error("RHD2K: delayed process cycle (%zu frames)", nframes - expected);
                 driver->last_wait_ust = wait_enter;
         }
+        else {
+                usleep(1e6 / driver->dev->sampling_rate() * (expected - nframes));
+        }
+        //driver->last_wait_ust += driver->period_usecs;
+        driver->last_wait_ust = engine->get_microseconds(); // use actual time
         engine->transport_cycle_start (engine, driver->last_wait_ust);
 
-        // read the data. this is relatively slow and eats into the process cycle
+        // read the data. this is relatively slow and eats into the process
+        // cycle. consider threading.
         if (driver->dev->read (driver->buffer, driver->period_size) == 0) {
                 jack_error ("RHD2K: fatal error reading data from device");
                 return -1;
         }
 
-#if DEBUG_CYCLE
-        timestamp = (uint32_t const *)((char*)driver->buffer + sizeof(uint64_t));
-        std::cerr << "frame " << *timestamp << ": time=" << driver->last_wait_ust
-                  << ", fifo=" << driver->dev->nframes() << std::endl;
-#endif
-
         // verify that the last frame is correct
         magic = (uint64_t const *)((char*)driver->buffer + driver->dev->frame_size() * (driver->period_size - 1));
         timestamp = (uint32_t const *)(magic + 1);
-        if (*magic == evalboard::frame_header && *timestamp == (driver->last_frame + driver->period_size - 1)) {
+        // back in 10 words for ADC results + TTL data
+        filler = (uint16_t const *)((char*)magic + driver->dev->frame_size() - 22);
+
+        if (*magic == evalboard::frame_header &&
+            *timestamp == (driver->last_frame + driver->period_size - 1) &&
+            *filler == 0)
+        {
                 driver->last_frame += driver->period_size;
                 return engine->run_cycle(engine, driver->period_size, 0.0);
         }
-        // deal with errors:
-        // is the device running? - may have been disconnected
+
         else if (!driver->dev->running()) {
                 jack_error ("RHD2K: device is not running or was disconnected");
                 return -1;
         }
-        else {
-                // attempting to read an underfull FIFO corrupts it. could try
-                // to recover by finding the next valid frame, but it's simpler
-                // to just restart acquisition. the xruns will be fairly large
-                // with this method
-                float delayed_usecs = -1.0f * driver->last_wait_ust;
-                rhd2k_driver_stop(driver);
-                rhd2k_driver_start(driver); // sets new ust
-                delayed_usecs += driver->last_wait_ust;
-                jack_error("xrun of %.3f usec", delayed_usecs);
-                engine->delay (engine, delayed_usecs);
+
+        // FIFO was underfull. attempting to read an underfull FIFO corrupts it.
+        // could try to recover by finding the next valid frame, but it's
+        // simpler to just restart acquisition. the xruns will be fairly large
+        // with this method.
+#ifndef NDEBUG
+        // try to find last good frame
+        if (*filler != 0) {
+                jack_info("underfull FIFO: last frame in FIFO corrupted");
         }
+        else {
+                size_t t;
+                for (t = 0; t < driver->period_size; ++t) {
+                        magic = (uint64_t const *)((char*)driver->buffer + driver->dev->frame_size() * t);
+                        if (*magic != evalboard::frame_header) {
+                                jack_info("underfull FIFO: first bad frame: %zu; magic=0x%lx", t, *magic);
+                                break;
+                        }
+                }
+        }
+#endif
+        float delayed_usecs = -1.0f * driver->last_wait_ust;
+        rhd2k_driver_stop(driver);
+        rhd2k_driver_start(driver); // sets new ust
+        delayed_usecs += driver->last_wait_ust;
+        jack_error("RHD2K: xrun of %.3f usec", delayed_usecs);
+        engine->delay (engine, delayed_usecs);
         return 0;
 }
 

@@ -399,7 +399,7 @@ supply voltage readings, so the effective sampling rate on these inputs is not
 the same as the amplifier. It might be nice to dedicate one of the aux command
 slots to sampling one of the ADCs at full sampling rate.
 
-* TODO document evalboard class
+* DONE document evalboard class
 * DONE better error messages for bad filtering values
 
 relevant functions now throw errors
@@ -430,11 +430,9 @@ Need 7.0+ (wheezy)
 * TODO test alsa_out with intan driver
 
 generates a fair number of xruns - 284 over about 12 hours.  There's also quite
-a bit of drift as the resampler adjusts itself.
-
-There's some oddness about the sample rate - the driver refuses to go to 30 kHz
-or any value other than 44.1 kHz, so the resampler is bound to be operating in
-overtime.
+a bit of drift as the resampler adjusts itself.  Running a delay test between
+the sound card output and the intan input indicates that the delay shifts
+steadily downward and then eventually causes an xrun.
 
 * DONE compare output to intan's program
 
@@ -473,3 +471,40 @@ other differences?
 2. dsp settle in fpga is true! this might be it
 
 yes. one bit off. geez.
+
+* TODO track down xruns
+
+getting infrequent underruns. the corruption appears to occur in the first
+frame, which implies that it's actually the previous period that was bad, and
+thus that the failure occurred in the last frame but after the magic # and
+timestamp. Probably this is caused by very slight differences in the system and
+FPGA clock. Query the fifo state immediately after reading shows that it creeps
+down from ~170 extra frames to around 11 at which point the xrun occurs. The
+host isn't waiting quite long enough, so it eats extra frames in the FIFO.
+
+So, need to do something to deal with small clock rate differences.  Ironically
+this seems to be more a problem with the RT kernel.  Probably with the normal
+kernel there is enough preemption by the kernel to compensate for the creep.
+But on average you would still expect to see the same behavior.
+
+I wonder if this is the cause for the creep I was observing when trying to use
+the alsa_out plugin.
+
+Right now the algorithm (which is in rhd2k_run_cycle) comprises the following steps
+
+1. check time entering the function.
+2. compare time to last cycle start and sleep until the start of the next cycle.
+3. read the expected number of frames from the FIFO
+4. increment the cycle start time
+5. validate the data
+
+What if instead I base the amount of time to wait off a query to the FIFO? The
+FIFO state will always be an underestimate because of the USB latency, so
+waiting the indicated amount of time and then optimistically reading should be
+safe. The danger is from big latency spikes, although this is probably very
+unlikely with the RT kernel.
+
+Okay, this appears to fix the problem. FIFO fill state remains nearly constant.
+Tried a run with alsa_out and the delay seems to stabilize quite nicely.  Will
+let this run overnight.
+
