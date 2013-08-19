@@ -571,6 +571,18 @@ every so often (about every 300 s). These spikes are associated with spikes in
 the delay, which range between 1-4 samples but can sometimes be much larger (15
 in one case from the last 13 hours of run time).
 
+* DONE fix xruns when only using eval ADCs
+
+If the driver is run with no connected chips (or with them all disabled), there
+are regular buffer underruns. This happens even if the fifo is set to have
+additional latency, which makes me wonder if I'm not calculating the length of
+the signal properly.
+
+: JACK_DRIVER_DIR=driver jackd -v -d rhd2000 -A 0 -I 1000
+
+Ah, yes, it's a programming error. The filler zeros aren't present when all the
+datastreams are disabled.
+
 * TODO stress test
 
 basic operation:

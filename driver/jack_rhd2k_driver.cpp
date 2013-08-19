@@ -1,4 +1,26 @@
-
+/*
+ *   Intan RHD2000 eval board Backend for Jack
+ *
+ *   Much of this code is based on the FFADO JACK driver (http://www.ffado.org)
+ *
+ *   Copyright (C) 2005-2007 Pieter Palmers
+ *   Copyright (C) 2012 Jonathan Woithe
+ *   Copyright (C) 2013 C Daniel Meliza
+ *
+ *   This program is free software; you can redistribute it and/or modify
+ *   it under the terms of the GNU General Public License as published by
+ *   the Free Software Foundation; either version 2 of the License, or
+ *   (at your option) any later version.
+ *
+ *   This program is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with this program; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
 #include <memory.h>
 #include <math.h>
 #include <stdio.h>
@@ -314,7 +336,7 @@ rhd2k_driver_run_cycle (rhd2k_driver_t *driver)
 
         // wait long enough to ensure enough data is in the FIFO
         if (nframes > expected) {
-                jack_error("RHD2K: delayed process cycle (%zu frames)", nframes - expected);
+                jack_info("RHD2K: delayed process cycle (%zu frames)", nframes - expected);
                 driver->last_wait_ust = wait_enter;
         }
         else {
@@ -334,12 +356,13 @@ rhd2k_driver_run_cycle (rhd2k_driver_t *driver)
         // verify that the last frame is correct
         magic = (uint64_t const *)((char*)driver->buffer + driver->dev->frame_size() * (driver->period_size - 1));
         timestamp = (uint32_t const *)(magic + 1);
-        // back in 10 words for ADC results + TTL data
+        // back in 10 words for ADC results + TTL data; however, filler is only
+        // present if a stream is enabled and frame size is > 32)
         filler = (uint16_t const *)((char*)magic + driver->dev->frame_size() - 22);
 
         if (*magic == evalboard::frame_header &&
             *timestamp == (driver->last_frame + driver->period_size - 1) &&
-            *filler == 0)
+            (*filler == 0 || driver->dev->frame_size() == 32))
         {
                 driver->last_frame += driver->period_size;
                 return engine->run_cycle(engine, driver->period_size, 0.0);
