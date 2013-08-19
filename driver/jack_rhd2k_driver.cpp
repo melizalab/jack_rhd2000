@@ -305,12 +305,13 @@ rhd2k_driver_run_cycle (rhd2k_driver_t *driver)
         const size_t nframes = driver->dev->nframes();
         const size_t expected = driver->period_size + driver->fifo_latency;
 
-#if DEBUG_CYCLE
-        std::cerr << wait_enter << ": fifo=" << nframes
-                  << "; wait=" << 1e6 / driver->dev->sampling_rate() * (expected - nframes)
-                  << "; idx=" << engine->rolling_client_usecs_index
-                  << std::endl;
+#ifndef NDEBUG
+        if (engine->verbose &&
+            engine->rolling_client_usecs_cnt % engine->rolling_interval == 0) {
+                jack_info("RHD2K: fifo = %d", nframes);
+        }
 #endif
+
         // wait long enough to ensure enough data is in the FIFO
         if (nframes > expected) {
                 jack_error("RHD2K: delayed process cycle (%zu frames)", nframes - expected);

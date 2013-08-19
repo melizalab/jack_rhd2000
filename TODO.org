@@ -427,7 +427,7 @@ Need 7.0+ (wheezy)
 : apt-get install jackd1 libjack-dev
 : apt-get source jackd1
 * DONE test realtime patch on modeln
-* TODO test alsa_out with intan driver
+* DONE test alsa_out with intan driver
 
 generates a fair number of xruns - 284 over about 12 hours.  There's also quite
 a bit of drift as the resampler adjusts itself.  Running a delay test between
@@ -472,7 +472,7 @@ other differences?
 
 yes. one bit off. geez.
 
-* TODO track down xruns
+* DONE track down xruns
 
 getting infrequent underruns. the corruption appears to occur in the first
 frame, which implies that it's actually the previous period that was bad, and
@@ -505,6 +505,83 @@ safe. The danger is from big latency spikes, although this is probably very
 unlikely with the RT kernel.
 
 Okay, this appears to fix the problem. FIFO fill state remains nearly constant.
-Tried a run with alsa_out and the delay seems to stabilize quite nicely.  Will
-let this run overnight.
+Tried a run with alsa_out and the delay seems to stabilize quite nicely (using
+jack_iodelay). Will let this run overnight.
+
+: head -n -5 delaystats2 | awk '{print NR,$3}' | gnuplot -p -e 'plot "-" title "delay"'
+
+After about 50000 time units (which look to be about 250 ms each, so about 3
+hours), the delay estimates become unstable, cycling between 61.0 to 62.6 ms.
+Stopping iodelay and restarting leads to similar behavior, suggesting that this
+is happening inside iodelay rather than alsa_out.  Try running alsa_out and
+outputting diagnostic instead.
+
+: awk '/res/{print NR,$2}' alsaout.log | sed 's/,//' | gnuplot -p -e 'plot "-" title "resamp"'
+
+This value wanders around a bit but does seem to asymptotically stabilize. Diffs
+are on the order of 1e-3 for the first few seconds and then 1e-4 thereafter.
+Running alsa_out with a lower value for the control clamp seems to improve the
+rate of convergence:
+
+: alsa_out -d hw:1 -r 32000 -C 5
+
+* TODO more delay testing
+
+[2013-08-15 Thu] see test_delay.sh for setup
+
+Run for several hours. At around 10000 data points (not sure how lnog this is),
+the delay estimates start to cycle (as noted above). These cycles correspond to
+changes in the alsa_out res (which I think is the ratio of sampling rates) and
+similar cycles in the offset (which I think is proably the difference in sample
+counts between the jack and alsa clocks. The res switches between 1.0066763,
+which is too slow, leading to an accumulation of positive offsets, and
+1.0066760, which is too slow, leading to an accumulation of negative offsets.
+The correct value is closer to 1.0066762
+
+The offset measurements from the DLL are quite noise, in contrast to the delay
+measures. This reflects the smoothing effects of the DLL. The delay measurement
+is really only going to depend on the cumulative effects of the resampling
+ratio.
+
+Killed jack_iodelay around 23000, which caused an xrun and therefore a reset of
+the acquisition process.  Unclear to me why this is unstable. One possibility is that
+the intan FIFO is starting to fill up, although the fact that I check the buffer
+fill state at the start of every cycle should prevent this.
+
+Patched jack_rhd2k_driver.cpp to print fifo fill state (at the beginning of the
+cycle). Restart the delay test. Not sure I really need to run iodelay, but it
+can't hurt. This run was much the same, with some kind of reset occurring
+acround 10000. It wasn't associated with an xrun.
+
+Third run, try with the alternative alsa/jack bridge "zita". Nominal delay is
+longer, but zita doesn't set its latency in the jack engine so this is not
+surprising.  Appears to converge faster, with delay variance around 0.05 ms. We
+do get some brief spikes around 1200. Let this run over the weekend.
+
+[2013-08-19 Mon] Results from weekend run. No xruns, but 201 delayed process
+cycles. Haven't seen this kind of error before, unclear if it's related to the
+resampling or not. Also not sure if I'm handling the error correctly. Delay
+stats are quite stable. Fairly frequent spikes from 87.8 to 87.9 ms, and then a
+few big outliers. Fifo fill state is stable around 205, with some infrequent
+dips to 180. This is definitely more stable than alsa_out, and the CPU and RT
+load are much lower too.
+
+However, I don't like the fact that the loop error spikes to about -6 or -8
+every so often (about every 300 s). These spikes are associated with spikes in
+the delay, which range between 1-4 samples but can sometimes be much larger (15
+in one case from the last 13 hours of run time).
+
+* TODO stress test
+
+basic operation:
+
+: JACK_DRIVER_DIR=driver jackd -v -d rhd2000 -A 0x1ffff,0.1,3000 > jackd.log 2>&1 &
+: alsa_out -v -r 32000 -C 5 > alsaout.log &
+: yass -name yass1 &  # configured to display channels 0-7 plus aux in
+: yass -name yass2 &  # displays channels 8-16
+
+jill:
+
+: jrecord -C jrecord_full.ini -t stress_test.arf
+: jstim -g 5 -o alsa_out:playback_1 -o alsa_out:playback_2 -e jrecord:trig_in -l -S ../jill/test_wav/*ref*wav
 
