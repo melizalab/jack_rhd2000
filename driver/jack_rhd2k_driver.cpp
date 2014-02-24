@@ -546,9 +546,9 @@ driver_get_descriptor ()
 
 	desc = (jack_driver_desc_t *) calloc (1, sizeof (jack_driver_desc_t));
 	strcpy (desc->name, "rhd2000");
-	desc->nparams = 5 + evalboard::nmosi;
+	desc->nparams = 6 + evalboard::nmosi;
 	desc->params = (jack_driver_param_desc_t *) calloc (desc->nparams,
-                                                                    sizeof (jack_driver_param_desc_t));
+                                                            sizeof (jack_driver_param_desc_t));
         param = desc->params;
 	strcpy (param->name, "device");
 	param->character  = 'd';
@@ -598,6 +598,14 @@ driver_get_descriptor ()
         param->type = JackDriverParamUInt;
         param->value.ui = default_settings.capture_frame_latency;
         strcpy(param->short_desc, "extra fifo latency (frames) ");
+        strcpy(param->long_desc, param->short_desc);
+
+        param++;
+        strcpy(param->name, "version");
+        param->character = 'V';
+        param->type = JackDriverParamUInt;
+        param->value.ui = default_settings.capture_frame_latency;
+        strcpy(param->short_desc, "driver version is 0.1.0 (option ignored) ");
         strcpy(param->long_desc, param->short_desc);
 
         return desc;
