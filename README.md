@@ -5,12 +5,19 @@ source for the JACK realtime audio toolkit. It is currently under development.
 ## Requirements
 
 - POSIX-compliant operating system
-- JACK audio connection kit, version `0.121` (<http://jackaudio.org>)
+- JACK audio connection kit, version `0.124` (<http://jackaudio.org>)
 - An Intan RHD2000 eval board (<http://intantech.com>)
 - From Intan's download page, the Rhythm C++ API source code (specifically the
   `main.bit` file) and the USB drivers for your operating system (specifically
   `libokFrontPanel.so`). The last version of the FPGA code tested with this
   driver was the 130302 release.
+- Scons (<http://scons.org>)
+
+## Compilation
+
+To compile the driver, you will need a copy of the JACK source code, specifically the engine headers, which **are not** installed as part of the JACK development package. Thus, **in addition** to installing the JACK client headers and libraries, you need to download `jack-audio-connection-kit-0.124.1.tar.gz` from the JACK website and unpack the tarball in this directory, and create a symbolic link with `ln -s jack-audio-connection-kit-0.124.1 jack`.
+
+To compile, you'll then run `scons -Q`
 
 ## Installation
 
